@@ -100,46 +100,10 @@ tool Unraid's built-in WireGuard uses. The two coexist cleanly.
 
 ## Build & release
 
-### Automated (recommended)
+Releases are cut from the **Actions** tab → **Build and Release** →
+**Run workflow** ([release.yml](.github/workflows/release.yml)).
 
-GitHub Actions handles everything. From the repo's **Actions** tab →
-**Build and Release** → **Run workflow**:
-
-- Leave the version blank to use today's UTC date, or enter a specific
-  `YYYY.MM.DD`.
-- The workflow builds the `.txz` + `.plg`, creates the matching GitHub
-  release, and uploads both artifacts. The `.plg` is **release-only**
-  (not committed to `main`) — the install URL points to
-  `releases/latest/download/wg-watchdog.plg` so it always serves the
-  freshest manifest.
-
-Workflow file: [.github/workflows/release.yml](.github/workflows/release.yml).
-
-### Local build
-
-Required tools: `bash`, `tar` (GNU), `xz`, `md5sum`, `sha256sum`, `sed`.
-
-```bash
-./build.sh                 # version = today's YYYY.MM.DD
-VERSION=2026.05.01 ./build.sh
-```
-
-Produces in `dist/`:
-- `wg-watchdog-<version>-noarch-1.txz` — the Slackware package.
-- `wg-watchdog.plg` — the manifest with the `.txz`'s md5 baked in.
-
-To release manually: create a GitHub release tagged `<version>` and
-upload **both** `dist/wg-watchdog-<version>-noarch-1.txz` and
-`dist/wg-watchdog.plg` as release assets. Don't commit the `.plg` to
-the repo — the install URL resolves to the latest release asset.
-
-The `.plg` references the `.txz` at:
-```
-https://github.com/pacnpal/wireguard-watchdog/releases/download/<version>/wg-watchdog-<version>-noarch-1.txz
-```
-
-If you fork, grep-replace `pacnpal/wireguard-watchdog` in
-`wg-watchdog.plg.in` and this README before releasing.
+For a local build: `./build.sh` (or `VERSION=2026.05.01 ./build.sh`).
 
 ## Test plan
 
@@ -222,7 +186,6 @@ wireguard-watchdog/
 ├── LICENSE
 ├── build.sh
 ├── wg-watchdog.plg.in           # template; build.sh fills @@VERSION@@/@@MD5@@/@@PKG@@
-                                  # (the rendered .plg ships only as a release asset, not in main)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/{bug_report,feature_request}.yml
 │   └── workflows/{release,lint}.yml
@@ -243,14 +206,6 @@ wireguard-watchdog/
 
 ## Notes
 
-- `Menu="Utilities"` slots the page under **Tools → User Utilities**,
-  matching the convention used by User Scripts, Appdata Backup, ZFS
-  Master, etc. Edit `source/wg-watchdog.page` to move it elsewhere
-  (`Settings`, `NetworkServices`, etc.).
-- The Apply button posts to Unraid's built-in `/update.php`, which
-  writes the cfg and then runs `scripts/install_cron.sh` as the
-  `#command`. The `csrf_token` hidden input is required — Unraid's
-  webGUI rejects POSTs to plugin endpoints without it.
 - The watchdog uses `wg-quick down/up`, never `ip link` or direct
   `wg`-cli mutations, so it can't desync Unraid's built-in tunnel
   management.

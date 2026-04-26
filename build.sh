@@ -77,15 +77,6 @@ sed \
     "$PLG_TEMPLATE" > "$PLG_OUT"
 
 cat <<EOF
-
-Built artifacts in $DIST:
-  $(basename "$PKG_PATH")   ${SIZE} bytes
-    md5    = $MD5
-    sha256 = $SHA
-  $(basename "$PLG_OUT")
-
-Next: create a GitHub release tagged "${VERSION}" and upload BOTH the
-.txz and the .plg as release assets. The plugin install URL resolves
-to releases/latest/download/${PLUGIN}.plg, so the .plg should NOT be
-committed to git.
+Built $PKG_PATH (${SIZE} bytes, md5 $MD5)
+Built $PLG_OUT
 EOF
