@@ -59,8 +59,13 @@ jobs:
       - name: Verify .plg MD5 matches .txz
         run: |
           set -e
-          DECLARED=$(grep -oE '<MD5>[a-f0-9]{32}</MD5>' dist/wg-watchdog.plg | head -1 | sed 's|</\?MD5>||g')
+          DECLARED=$(grep -oE '<!ENTITY md5 +"[a-f0-9]{32}"' dist/wg-watchdog.plg \
+                       | sed -E 's|.*"([a-f0-9]{32})".*|\1|')
           ACTUAL=$(md5sum dist/wg-watchdog-9999.99.99-noarch-1.txz | awk '{print $1}')
+          if [ -z "$DECLARED" ]; then
+            echo "::error::Could not extract MD5 from dist/wg-watchdog.plg"
+            exit 1
+          fi
           if [ "$DECLARED" != "$ACTUAL" ]; then
             echo "::error::MD5 mismatch: plg=$DECLARED txz=$ACTUAL"
             exit 1

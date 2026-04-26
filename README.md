@@ -18,10 +18,10 @@ Pings a peer through the tunnel on a schedule; bounces the tunnel via
 </div>
 
 > [!IMPORTANT]
-> Requires the Unraid built-in **WireGuard** plugin and at least one
-> configured tunnel (`wg0`, `wg1`, …). The watchdog never touches `wg0`
-> directly — it only invokes `wg-quick`, the same interface Unraid uses
-> internally — so the two coexist cleanly.
+> Requires Unraid's built-in **WireGuard** support (Settings → VPN
+> Manager) and at least one configured tunnel (`wg0`, `wg1`, …). The
+> watchdog never touches `wg0` directly — it only invokes `wg-quick`,
+> the same tool Unraid uses internally — so the two coexist cleanly.
 
 ## Why?
 
@@ -94,7 +94,7 @@ you explicitly enable it.
   during shutdown.
 
 The plugin **never touches `wg0` directly** — only `wg-quick`, the same
-tool the built-in WireGuard plugin uses. The two coexist cleanly.
+tool Unraid's built-in WireGuard uses. The two coexist cleanly.
 
 ## Build & release
 
@@ -138,8 +138,8 @@ If you fork, grep-replace `pacnpal/wireguard-watchdog` in
 
 ## Test plan
 
-Tested target: Unraid 7.2.x in a VM, with the Unraid WireGuard plugin
-installed and a `wg0` tunnel configured against a reachable peer.
+Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
+**Settings → VPN Manager** against a reachable peer.
 
 1. **Install**
    - Build with `./build.sh`. Push to a test branch + create a release.
@@ -198,7 +198,7 @@ installed and a `wg0` tunnel configured against a reachable peer.
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
-| **Test Now** prints `FAIL: interface wg0 does not exist` | Wrong interface name, or the Unraid WireGuard plugin isn't started. | Settings → VPN Manager. Run `wg show` in the terminal. |
+| **Test Now** prints `FAIL: interface wg0 does not exist` | Wrong interface name, or the tunnel isn't started. | Settings → VPN Manager. Run `wg show` in the terminal. |
 | Test passes, but cron never fires | Service disabled, or `update_cron` wasn't called after Apply. | `cat /etc/cron.d/wg-watchdog` should exist; `cat /boot/config/plugins/wg-watchdog/wg-watchdog.cfg` should show `SERVICE_ENABLED="yes"`. |
 | Bounces happen but tunnel stays down | The peer is genuinely unreachable, or `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg-quick up wg0: failed`; run it manually to see the error. |
 | Log says `skipped: previous run still in progress` repeatedly | A check is taking longer than the interval (DNS hangs, network stalls). | Lengthen the interval, or set `VERBOSE="no"` to suppress these messages. |
@@ -245,8 +245,8 @@ wireguard-watchdog/
   `source/wg-watchdog.page` if you'd rather slot it elsewhere
   (`OtherSettings`, `UserPreferences`, etc.).
 - The watchdog uses `wg-quick down/up`, never `ip link` or direct
-  `wg`-cli mutations, so it can't desync the Unraid WireGuard plugin's
-  own state.
+  `wg`-cli mutations, so it can't desync Unraid's built-in tunnel
+  management.
 
 ## License
 

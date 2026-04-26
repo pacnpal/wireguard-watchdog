@@ -32,6 +32,11 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "Building wg-watchdog $V"
 
+      - name: Install xmllint
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxml2-utils
+
       - name: Build artifacts
         run: VERSION="${{ steps.ver.outputs.version }}" ./build.sh
 

@@ -36,8 +36,9 @@ _(Tunnel interface)_:
 : <input type="text" name="INTERFACE" value="<?=htmlspecialchars($cfg['INTERFACE'])?>" placeholder="wg0">
 
 <blockquote class="inline_help">
-The WireGuard interface to monitor (e.g. wg0, wg1). Managed by the
-Unraid WireGuard plugin -- this watchdog only calls wg-quick down/up.
+The WireGuard interface to monitor (e.g. wg0, wg1). Managed by
+Unraid's built-in VPN Manager -- this watchdog only calls
+wg-quick down/up.
 </blockquote>
 
 _(Peer IP to ping)_:
