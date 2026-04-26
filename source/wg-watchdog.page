@@ -1,6 +1,6 @@
 Menu="Utilities"
 Title="WireGuard Watchdog"
-Icon="shield"
+Icon="wg-watchdog.png"
 ---
 <?PHP
 /* Copyright 2026, pacnpal.

@@ -17,7 +17,7 @@
          version="&version;"
          launch="&launch;"
          pluginURL="&pluginURL;"
-         icon="shield"
+         icon="https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/assets/logo-128.png"
          min="6.12.0"
          support="&github;"
          project="&github;"
