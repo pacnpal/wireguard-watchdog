@@ -1,0 +1,75 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (YYYY.MM.DD). Defaults to today (UTC)."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Determine version
+        id: ver
+        run: |
+          V="${{ inputs.version }}"
+          [ -z "$V" ] && V="$(date -u '+%Y.%m.%d')"
+          if ! [[ "$V" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]]; then
+            echo "::error::Invalid version '$V' (expected YYYY.MM.DD)"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building wg-watchdog $V"
+
+      - name: Build artifacts
+        run: VERSION="${{ steps.ver.outputs.version }}" ./build.sh
+
+      - name: Inspect artifacts
+        run: |
+          ls -la dist/
+          md5sum  dist/*.txz
+          sha256sum dist/*.txz
+          xmllint --noout dist/wg-watchdog.plg
+          tar -tJvf dist/*.txz | head -30
+
+      - name: Commit updated wg-watchdog.plg to main
+        run: |
+          cp dist/wg-watchdog.plg wg-watchdog.plg
+          git add wg-watchdog.plg
+          if git diff --cached --quiet; then
+            echo "wg-watchdog.plg unchanged"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "release: wg-watchdog ${{ steps.ver.outputs.version }} [skip ci]"
+          git push origin main
+
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          if gh release view "$V" >/dev/null 2>&1; then
+            echo "Release $V already exists; replacing assets."
+          else
+            gh release create "$V" \
+              --title "wg-watchdog $V" \
+              --notes "Automated release for wg-watchdog $V (built from $(git rev-parse --short HEAD))." \
+              --target main
+          fi
+          gh release upload "$V" \
+            "dist/wg-watchdog-${V}-noarch-1.txz" \
+            "dist/wg-watchdog.plg" \
+            --clobber

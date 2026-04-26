@@ -1,0 +1,10 @@
+#!/bin/bash
+# Array started: re-sync cron from persisted cfg.
+EMHTTP="/usr/local/emhttp/plugins/wg-watchdog"
+LOG="/var/log/wg-watchdog.log"
+
+touch "$LOG"
+"$EMHTTP/scripts/install_cron.sh" >/dev/null 2>&1
+
+ts=$(date '+%Y-%m-%d %H:%M:%S')
+echo "[$ts] event: started -- cron synced" >> "$LOG"

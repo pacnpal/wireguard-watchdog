@@ -1,0 +1,87 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "wg-watchdog">
+<!ENTITY author    "pacnpal">
+<!ENTITY version   "2026.04.26">
+<!ENTITY md5       "06cc8e895a35c4ae5b27db7b37d00f1e">
+<!ENTITY launch    "Settings/wg-watchdog">
+<!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/wg-watchdog.plg">
+<!ENTITY pkg       "wg-watchdog-2026.04.26-noarch-1.txz">
+<!ENTITY pluginLOC "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
+]>
+
+<PLUGIN  name="&name;"
+         author="&author;"
+         version="&version;"
+         launch="&launch;"
+         pluginURL="&pluginURL;"
+         icon="shield"
+         min="6.12.0"
+         support="&github;"
+         project="&github;"
+         readme="&github;#readme">
+
+<CHANGES>
+### &version;
+- Initial release.
+</CHANGES>
+
+<!-- Pre-install cleanup: stage plugin dir, remove stale package cache -->
+<FILE Run="/bin/bash">
+<INLINE>
+mkdir -p &pluginLOC;
+find &pluginLOC; -maxdepth 1 -name 'wg-watchdog-*.txz' ! -name '&pkg;' -delete 2&gt;/dev/null
+</INLINE>
+</FILE>
+
+<!-- Download the package -->
+<FILE Name="&pluginLOC;/&pkg;">
+<URL>&github;/releases/download/&version;/&pkg;</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<!-- Install + post-install -->
+<FILE Run="/bin/bash">
+<INLINE>
+upgradepkg --install-new &pluginLOC;/&pkg;
+
+# Seed default config on first install -- never overwrite user changes
+if [ ! -f &pluginLOC;/wg-watchdog.cfg ]; then
+    cp &emhttpLOC;/default.cfg &pluginLOC;/wg-watchdog.cfg
+fi
+
+# Ensure log exists so the View Log button doesn't 404 on first open
+touch /var/log/wg-watchdog.log
+chmod 0644 /var/log/wg-watchdog.log
+
+# Re-sync cron from current cfg (no-op if disabled)
+&emhttpLOC;/scripts/install_cron.sh
+
+echo ""
+echo "----------------------------------------------------------"
+echo " wg-watchdog &version; installed."
+echo " Configure under Settings -&gt; WG Watchdog."
+echo " Default state: disabled. Set Enabled=yes to start checks."
+echo "----------------------------------------------------------"
+echo ""
+</INLINE>
+</FILE>
+
+<!-- Remove: drop cron + config, keep log -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+rm -f &pluginLOC;/wg-watchdog.cron
+/usr/local/sbin/update_cron 2&gt;/dev/null
+
+removepkg &name; 2&gt;/dev/null
+
+rm -rf &pluginLOC;
+rm -rf &emhttpLOC;
+
+echo "wg-watchdog removed (log preserved at /var/log/wg-watchdog.log)"
+</INLINE>
+</FILE>
+
+</PLUGIN>

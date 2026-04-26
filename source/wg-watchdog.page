@@ -1,0 +1,103 @@
+Menu="NetworkServices"
+Title="WG Watchdog"
+Icon="shield"
+Tag="shield"
+---
+<?php
+$plugin = "wg-watchdog";
+$cfg    = parse_plugin_cfg($plugin);
+
+$defaults = [
+    'SERVICE_ENABLED' => 'no',
+    'INTERFACE'       => 'wg0',
+    'PEER_IP'         => '10.99.0.1',
+    'INTERVAL'        => '60',
+    'VERBOSE'         => 'no',
+    'LOG_FILE'        => '/var/log/wg-watchdog.log',
+];
+foreach ($defaults as $k => $v) {
+    if (!isset($cfg[$k]) || $cfg[$k] === '') $cfg[$k] = $v;
+}
+?>
+
+<form markdown="1" method="POST" action="/plugins/wg-watchdog/include/apply.php" target="progressFrame">
+
+_(Enabled)_:
+: <select name="SERVICE_ENABLED">
+  <?=mk_option($cfg['SERVICE_ENABLED'], "no",  _("No"))?>
+  <?=mk_option($cfg['SERVICE_ENABLED'], "yes", _("Yes"))?>
+  </select>
+
+<blockquote class="inline_help">
+When disabled, the watchdog cron entry is removed and no checks run.
+</blockquote>
+
+_(Tunnel interface)_:
+: <input type="text" name="INTERFACE" value="<?=htmlspecialchars($cfg['INTERFACE'])?>" placeholder="wg0">
+
+<blockquote class="inline_help">
+The WireGuard interface to monitor (e.g. wg0, wg1). Managed by the
+Unraid WireGuard plugin -- this watchdog only calls wg-quick down/up.
+</blockquote>
+
+_(Peer IP to ping)_:
+: <input type="text" name="PEER_IP" value="<?=htmlspecialchars($cfg['PEER_IP'])?>" placeholder="10.99.0.1">
+
+<blockquote class="inline_help">
+An IP reachable through the tunnel -- typically the remote peer's
+internal address.
+</blockquote>
+
+_(Check interval)_:
+: <input type="number" name="INTERVAL" min="20" step="1" value="<?=htmlspecialchars($cfg['INTERVAL'])?>" style="width:6em;"> _(seconds, minimum 20)_
+
+<blockquote class="inline_help">
+Below 60s the cron file is generated as multiple per-minute lines with
+sleep offsets.
+</blockquote>
+
+_(Verbose logging)_:
+: <select name="VERBOSE">
+  <?=mk_option($cfg['VERBOSE'], "no",  _("No"))?>
+  <?=mk_option($cfg['VERBOSE'], "yes", _("Yes"))?>
+  </select>
+
+<blockquote class="inline_help">
+If yes, every successful ping is logged. Otherwise only failures and
+recovery actions are logged.
+</blockquote>
+
+_(Log file)_:
+: <input type="text" readonly value="<?=htmlspecialchars($cfg['LOG_FILE'])?>" style="width:24em;background:#eee;">
+
+&nbsp;
+: <input type="submit" name="#apply" value="_(Apply)_">
+  <input type="button" value="_(Test Now)_" onclick="wgTest()">
+  <input type="button" value="_(View Log)_" onclick="wgLog()">
+
+</form>
+
+<div id="wg-watchdog-output"
+     style="display:none;white-space:pre-wrap;font-family:monospace;background:#111;color:#eee;padding:10px;margin-top:10px;max-height:420px;overflow:auto;border-radius:4px;"></div>
+
+<script>
+function wgWatchdogShow(text) {
+    var out = document.getElementById('wg-watchdog-output');
+    out.style.display = 'block';
+    out.textContent = text;
+}
+function wgTest() {
+    wgWatchdogShow('Running test...');
+    fetch('/plugins/wg-watchdog/include/test.php', {method:'POST', credentials:'same-origin'})
+        .then(function(r){ return r.text(); })
+        .then(function(t){ wgWatchdogShow(t || '(no output)'); })
+        .catch(function(e){ wgWatchdogShow('Error: ' + e); });
+}
+function wgLog() {
+    wgWatchdogShow('Loading log...');
+    fetch('/plugins/wg-watchdog/include/log.php', {credentials:'same-origin'})
+        .then(function(r){ return r.text(); })
+        .then(function(t){ wgWatchdogShow(t || '(log empty)'); })
+        .catch(function(e){ wgWatchdogShow('Error: ' + e); });
+}
+</script>

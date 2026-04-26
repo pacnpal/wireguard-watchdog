@@ -1,0 +1,9 @@
+#!/bin/bash
+# Array stopping: remove cron so no checks run during shutdown.
+EMHTTP="/usr/local/emhttp/plugins/wg-watchdog"
+LOG="/var/log/wg-watchdog.log"
+
+"$EMHTTP/scripts/remove_cron.sh" >/dev/null 2>&1
+
+ts=$(date '+%Y-%m-%d %H:%M:%S')
+echo "[$ts] event: stopping -- cron removed" >> "$LOG"
