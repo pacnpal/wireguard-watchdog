@@ -6,6 +6,7 @@
 <!ENTITY md5       "@@MD5@@">
 <!ENTITY launch    "Settings/wg-watchdog">
 <!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
+<!ENTITY support   "https://forums.unraid.net/topic/198468-plugin-wireguard-watchdog/">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/plugin/wg-watchdog.plg">
 <!ENTITY pkg       "@@PKG@@">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
@@ -19,7 +20,7 @@
          pluginURL="&pluginURL;"
          icon="wg-watchdog.png"
          min="6.12.0"
-         support="&github;"
+         support="&support;"
          project="&github;"
          readme="&github;#readme">
 
