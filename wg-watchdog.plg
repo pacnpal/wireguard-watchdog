@@ -3,7 +3,7 @@
 <!ENTITY name      "wg-watchdog">
 <!ENTITY author    "pacnpal">
 <!ENTITY version   "2026.04.26">
-<!ENTITY md5       "7f27413c1454ef2ad01a1607da3585ca">
+<!ENTITY md5       "3558df3b64243b46bb221d8e8a5b655e">
 <!ENTITY launch    "Settings/wg-watchdog">
 <!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/wg-watchdog.plg">
@@ -62,7 +62,7 @@ chmod 0644 /var/log/wg-watchdog.log
 echo ""
 echo "----------------------------------------------------------"
 echo " wg-watchdog &version; installed."
-echo " Configure under Settings -&gt; WG Watchdog."
+echo " Configure under Tools -&gt; User Utilities -&gt; WireGuard Watchdog."
 echo " Default state: disabled. Set Enabled=yes to start checks."
 echo "----------------------------------------------------------"
 echo ""

@@ -49,8 +49,8 @@ Use it if you:
    ```
 3. Click **Install**. The plugin downloads its `.txz` from the matching
    GitHub release and installs to `/usr/local/emhttp/plugins/wg-watchdog/`.
-4. Open **Settings → WG Watchdog**, fill in the form, set **Enabled =
-   yes**, click **Apply**.
+4. Open **Tools → User Utilities → WireGuard Watchdog**, fill in the
+   form, set **Enabled = yes**, click **Apply**.
 
 The plugin defaults to `Enabled=no` on first install. Nothing runs until
 you explicitly enable it.
@@ -74,7 +74,7 @@ you explicitly enable it.
   inline. Honours your settings but ignores the Enabled toggle.
 - **View Log** — tails the last 200 lines of the configured log file.
 
-> _Screenshot placeholder: Settings → WG Watchdog page._
+> _Screenshot placeholder: Tools → User Utilities → WireGuard Watchdog._
 
 ## How it works
 
@@ -145,7 +145,7 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
    - Build with `./build.sh`. Push to a test branch + create a release.
    - Paste the .plg URL into Plugins → Install Plugin.
    - Verify install log ends with the "wg-watchdog … installed" banner.
-   - Verify **Settings → WG Watchdog** appears.
+   - Verify **Tools → User Utilities → WireGuard Watchdog** appears.
 
 2. **Defaults**
    - Open the page. Confirm `Enabled = no`, `INTERFACE = wg0`,
@@ -228,7 +228,7 @@ wireguard-watchdog/
 ├── source/                      # installs to /usr/local/emhttp/plugins/wg-watchdog/
 │   ├── default.cfg
 │   ├── wg-watchdog.page
-│   ├── include/{apply,test,log}.php
+│   ├── include/{test,log}.php
 │   ├── scripts/{watchdog,install_cron,remove_cron}.sh
 │   └── event/{started,stopping}
 └── dist/                        # produced by build.sh; not checked in
@@ -238,12 +238,14 @@ wireguard-watchdog/
 
 ## Notes
 
-- `Menu="NetworkServices"` slots the page under **Settings → Network
-  Services**. The original brief said "Menu: Settings"; on Unraid 7.x
-  the Settings panel is partitioned into named sub-menus, and
-  NetworkServices is the natural fit for a WireGuard helper. Edit
-  `source/wg-watchdog.page` if you'd rather slot it elsewhere
-  (`OtherSettings`, `UserPreferences`, etc.).
+- `Menu="Utilities"` slots the page under **Tools → User Utilities**,
+  matching the convention used by User Scripts, Appdata Backup, ZFS
+  Master, etc. Edit `source/wg-watchdog.page` to move it elsewhere
+  (`Settings`, `NetworkServices`, etc.).
+- The Apply button posts to Unraid's built-in `/update.php`, which
+  writes the cfg and then runs `scripts/install_cron.sh` as the
+  `#command`. The `csrf_token` hidden input is required — Unraid's
+  webGUI rejects POSTs to plugin endpoints without it.
 - The watchdog uses `wg-quick down/up`, never `ip link` or direct
   `wg`-cli mutations, so it can't desync Unraid's built-in tunnel
   management.

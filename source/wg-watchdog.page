@@ -1,9 +1,15 @@
-Menu="NetworkServices"
-Title="WG Watchdog"
+Menu="Utilities"
+Title="WireGuard Watchdog"
 Icon="shield"
-Tag="shield"
 ---
-<?php
+<?PHP
+/* Copyright 2026, pacnpal.
+ *
+ * MIT License -- see LICENSE in the project repository.
+ */
+?>
+
+<?
 $plugin = "wg-watchdog";
 $cfg    = parse_plugin_cfg($plugin);
 
@@ -20,70 +26,96 @@ foreach ($defaults as $k => $v) {
 }
 ?>
 
-<form markdown="1" method="POST" action="/plugins/wg-watchdog/include/apply.php" target="progressFrame">
+<div style="width: 75%; float:left">
+
+<form markdown="1" name="wg_watchdog" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
+<input type="hidden" name="#file"      value="wg-watchdog/wg-watchdog.cfg">
+<input type="hidden" name="#command"   value="plugins/wg-watchdog/scripts/install_cron.sh">
+
+:wg_watchdog_intro_plug:
+> WireGuard Watchdog pings a peer through your WireGuard tunnel on a
+> schedule. If the peer becomes unreachable, the tunnel is bounced via
+> `wg-quick down` / `wg-quick up`. Requires Unraid's built-in WireGuard
+> support (Settings → VPN Manager) and at least one configured tunnel.
+:end
 
 _(Enabled)_:
-: <select name="SERVICE_ENABLED">
-  <?=mk_option($cfg['SERVICE_ENABLED'], "no",  _("No"))?>
-  <?=mk_option($cfg['SERVICE_ENABLED'], "yes", _("Yes"))?>
+: <select name="SERVICE_ENABLED" size="1">
+    <?=mk_option($cfg['SERVICE_ENABLED'], "no",  "_(No)_")?>
+    <?=mk_option($cfg['SERVICE_ENABLED'], "yes", "_(Yes)_")?>
   </select>
 
-<blockquote class="inline_help">
-When disabled, the watchdog cron entry is removed and no checks run.
-</blockquote>
+:wg_watchdog_enabled_plug:
+> Master toggle. When set to 'No' the watchdog cron entry is removed
+> and no checks are run.
+:end
 
 _(Tunnel interface)_:
-: <input type="text" name="INTERFACE" value="<?=htmlspecialchars($cfg['INTERFACE'])?>" placeholder="wg0">
+: <input type="text" name="INTERFACE" class="narrow" maxlength="15" value="<?=htmlspecialchars($cfg['INTERFACE'])?>" placeholder="wg0">
 
-<blockquote class="inline_help">
-The WireGuard interface to monitor (e.g. wg0, wg1). Managed by
-Unraid's built-in VPN Manager -- this watchdog only calls
-wg-quick down/up.
-</blockquote>
+:wg_watchdog_interface_plug:
+> The WireGuard interface to monitor (e.g. `wg0`, `wg1`). Managed by
+> Unraid's built-in VPN Manager -- this watchdog only invokes
+> `wg-quick down` / `wg-quick up`.
+:end
 
 _(Peer IP to ping)_:
-: <input type="text" name="PEER_IP" value="<?=htmlspecialchars($cfg['PEER_IP'])?>" placeholder="10.99.0.1">
+: <input type="text" name="PEER_IP" class="narrow" maxlength="45" value="<?=htmlspecialchars($cfg['PEER_IP'])?>" placeholder="10.99.0.1">
 
-<blockquote class="inline_help">
-An IP reachable through the tunnel -- typically the remote peer's
-internal address.
-</blockquote>
+:wg_watchdog_peer_plug:
+> An IP reachable through the tunnel -- typically the remote peer's
+> internal address.
+:end
 
-_(Check interval)_:
-: <input type="number" name="INTERVAL" min="20" step="1" value="<?=htmlspecialchars($cfg['INTERVAL'])?>" style="width:6em;"> _(seconds, minimum 20)_
+_(Check interval)_ _(seconds)_:
+: <input type="number" name="INTERVAL" class="narrow" min="20" step="1" value="<?=htmlspecialchars($cfg['INTERVAL'])?>" placeholder="60">
 
-<blockquote class="inline_help">
-Below 60s the cron file is generated as multiple per-minute lines with
-sleep offsets.
-</blockquote>
+:wg_watchdog_interval_plug:
+> How often to ping (minimum 20 seconds). Below 60s the cron file is
+> generated as multiple per-minute lines with `sleep` offsets.
+:end
 
 _(Verbose logging)_:
-: <select name="VERBOSE">
-  <?=mk_option($cfg['VERBOSE'], "no",  _("No"))?>
-  <?=mk_option($cfg['VERBOSE'], "yes", _("Yes"))?>
+: <select name="VERBOSE" size="1">
+    <?=mk_option($cfg['VERBOSE'], "no",  "_(No)_")?>
+    <?=mk_option($cfg['VERBOSE'], "yes", "_(Yes)_")?>
   </select>
 
-<blockquote class="inline_help">
-If yes, every successful ping is logged. Otherwise only failures and
-recovery actions are logged.
-</blockquote>
+:wg_watchdog_verbose_plug:
+> If 'Yes', every check is logged with full ping stats. Otherwise only
+> failures and recovery actions are logged. Use sparingly to avoid
+> growing the log file.
+:end
 
 _(Log file)_:
-: <input type="text" readonly value="<?=htmlspecialchars($cfg['LOG_FILE'])?>" style="width:24em;background:#eee;">
+: <input type="text" name="LOG_FILE" class="narrow" value="<?=htmlspecialchars($cfg['LOG_FILE'])?>" readonly>
 
-&nbsp;
-: <input type="submit" name="#apply" value="_(Apply)_">
-  <input type="button" value="_(Test Now)_" onclick="wgTest()">
-  <input type="button" value="_(View Log)_" onclick="wgLog()">
+:wg_watchdog_logfile_plug:
+> Read-only. Defaults to `/var/log/wg-watchdog.log` and is recreated on
+> each boot (logs are not persisted across reboots).
+:end
+
+<input type="submit" name="#default" value="_(Default)_">
+: <input type="submit" name="#apply" value="_(Apply)_"><input type="button" value="_(Done)_" onclick="done()">
 
 </form>
 
+</div>
+
+<div style="width: 75%; float:left; margin-top: 20px;">
+<form markdown="1" name="wg_watchdog_actions">
+
+_(Diagnostics)_:
+: <input type="button" value="_(Test Now)_" onclick="wgTest()">
+  <input type="button" value="_(View Log)_" onclick="wgLog()">
+
+</form>
 <div id="wg-watchdog-output"
      style="display:none;white-space:pre-wrap;font-family:monospace;background:#111;color:#eee;padding:10px;margin-top:10px;max-height:420px;overflow:auto;border-radius:4px;"></div>
+</div>
 
 <script>
-var WG_CSRF = "<?=$var['csrf_token']?>";
 function wgWatchdogShow(text) {
     var out = document.getElementById('wg-watchdog-output');
     out.style.display = 'block';
@@ -91,19 +123,14 @@ function wgWatchdogShow(text) {
 }
 function wgTest() {
     wgWatchdogShow('Running test...');
-    var fd = new FormData();
-    fd.append('csrf_token', WG_CSRF);
-    fetch('/plugins/wg-watchdog/include/test.php', {method:'POST', body:fd, credentials:'same-origin'})
-        .then(function(r){ return r.text(); })
-        .then(function(t){ wgWatchdogShow(t || '(no output)'); })
-        .catch(function(e){ wgWatchdogShow('Error: ' + e); });
+    $.post('/plugins/wg-watchdog/include/test.php', {csrf_token: csrf_token},
+           function(data) { wgWatchdogShow(data || '(no output)'); })
+     .fail(function(xhr) { wgWatchdogShow('Error: ' + xhr.status + ' ' + xhr.statusText); });
 }
 function wgLog() {
     wgWatchdogShow('Loading log...');
-    fetch('/plugins/wg-watchdog/include/log.php?csrf_token=' + encodeURIComponent(WG_CSRF),
-          {credentials:'same-origin'})
-        .then(function(r){ return r.text(); })
-        .then(function(t){ wgWatchdogShow(t || '(log empty)'); })
-        .catch(function(e){ wgWatchdogShow('Error: ' + e); });
+    $.get('/plugins/wg-watchdog/include/log.php', {csrf_token: csrf_token},
+          function(data) { wgWatchdogShow(data || '(log empty)'); })
+     .fail(function(xhr) { wgWatchdogShow('Error: ' + xhr.status + ' ' + xhr.statusText); });
 }
 </script>

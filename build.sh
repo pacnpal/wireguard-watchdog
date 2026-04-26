@@ -52,7 +52,7 @@ wg-watchdog: wg-watchdog (WireGuard tunnel watchdog for Unraid)
 wg-watchdog:
 wg-watchdog: Pings a peer through a WireGuard tunnel interface on a schedule
 wg-watchdog: and bounces the tunnel via wg-quick if the peer becomes
-wg-watchdog: unreachable. Configurable from Settings -> WG Watchdog.
+wg-watchdog: unreachable. Configurable from Tools -> User Utilities -> WireGuard Watchdog.
 wg-watchdog:
 wg-watchdog: Requires Unraid's built-in WireGuard support and a configured tunnel.
 wg-watchdog:

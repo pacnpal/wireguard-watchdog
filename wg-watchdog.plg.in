@@ -62,7 +62,7 @@ chmod 0644 /var/log/wg-watchdog.log
 echo ""
 echo "----------------------------------------------------------"
 echo " wg-watchdog &version; installed."
-echo " Configure under Settings -&gt; WG Watchdog."
+echo " Configure under Tools -&gt; User Utilities -&gt; WireGuard Watchdog."
 echo " Default state: disabled. Set Enabled=yes to start checks."
 echo "----------------------------------------------------------"
 echo ""
