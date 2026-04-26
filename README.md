@@ -103,7 +103,8 @@ tool Unraid's built-in WireGuard uses. The two coexist cleanly.
 Releases are cut from the **Actions** tab → **Build and Release** →
 **Run workflow** ([release.yml](.github/workflows/release.yml)).
 
-For a local build: `./build.sh` (or `VERSION=2026.05.01 ./build.sh`).
+`./build.sh` is for local testing only — the workflow builds and
+attaches the public release assets.
 
 ## Test plan
 

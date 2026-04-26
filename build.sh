@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# build.sh -- produce wg-watchdog.plg + wg-watchdog-<version>-noarch-1.txz
+# Local build/test only. Public releases are built and attached by
+# .github/workflows/release.yml.
 #
 # Required tools: bash, GNU tar, xz, md5sum, sha256sum, sed.
 # Optional: install Slackware's `makepkg` if you want the canonical packager,
