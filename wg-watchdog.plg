@@ -3,7 +3,7 @@
 <!ENTITY name      "wg-watchdog">
 <!ENTITY author    "pacnpal">
 <!ENTITY version   "2026.04.26">
-<!ENTITY md5       "15a87201d814faf2ad9bc1f07f693706">
+<!ENTITY md5       "7f27413c1454ef2ad01a1607da3585ca">
 <!ENTITY launch    "Settings/wg-watchdog">
 <!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/wg-watchdog.plg">
