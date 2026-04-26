@@ -67,12 +67,14 @@ you explicitly enable it.
 | Log file          | `/var/log/wg-watchdog.log`    | Read-only display in the UI. |
 
 **Buttons:**
-- **Apply** — validates the form, writes
-  `/boot/config/plugins/wg-watchdog/wg-watchdog.cfg`, regenerates
-  `wg-watchdog.cron`, and runs `update_cron`.
+- **Apply** — posts the form to Unraid's `/update.php`, which writes
+  `/boot/config/plugins/wg-watchdog/wg-watchdog.cfg` and runs
+  `scripts/install_cron.sh` (regenerates the cron file and calls
+  `update_cron`).
 - **Test Now** — runs `watchdog.sh --test` once and shows the output
   inline. Honours your settings but ignores the Enabled toggle.
 - **View Log** — tails the last 200 lines of the configured log file.
+- **Clear Log** — truncates the log file (with confirmation prompt).
 
 > _Screenshot placeholder: Tools → User Utilities → WireGuard Watchdog._
 
@@ -228,7 +230,7 @@ wireguard-watchdog/
 ├── source/                      # installs to /usr/local/emhttp/plugins/wg-watchdog/
 │   ├── default.cfg
 │   ├── wg-watchdog.page
-│   ├── include/{test,log}.php
+│   ├── include/{test,log,clear}.php
 │   ├── scripts/{watchdog,install_cron,remove_cron}.sh
 │   └── event/{started,stopping}
 └── dist/                        # produced by build.sh; not checked in

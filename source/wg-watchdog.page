@@ -109,6 +109,7 @@ _(Log file)_:
 _(Diagnostics)_:
 : <input type="button" value="_(Test Now)_" onclick="wgTest()">
   <input type="button" value="_(View Log)_" onclick="wgLog()">
+  <input type="button" value="_(Clear Log)_" onclick="wgClear()">
 
 </form>
 <div id="wg-watchdog-output"
@@ -131,6 +132,13 @@ function wgLog() {
     wgWatchdogShow('Loading log...');
     $.get('/plugins/wg-watchdog/include/log.php', {csrf_token: csrf_token},
           function(data) { wgWatchdogShow(data || '(log empty)'); })
+     .fail(function(xhr) { wgWatchdogShow('Error: ' + xhr.status + ' ' + xhr.statusText); });
+}
+function wgClear() {
+    if (!confirm("_(Clear the WireGuard Watchdog log?)_")) return;
+    wgWatchdogShow('Clearing log...');
+    $.post('/plugins/wg-watchdog/include/clear.php', {csrf_token: csrf_token},
+           function(data) { wgWatchdogShow(data || 'Log cleared.'); })
      .fail(function(xhr) { wgWatchdogShow('Error: ' + xhr.status + ' ' + xhr.statusText); });
 }
 </script>
