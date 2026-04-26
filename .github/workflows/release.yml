@@ -48,6 +48,20 @@ jobs:
           xmllint --noout dist/wg-watchdog.plg
           tar -tJvf dist/*.txz | head -30
 
+      - name: Commit plugin/wg-watchdog.plg to main
+        run: |
+          mkdir -p plugin
+          cp dist/wg-watchdog.plg plugin/wg-watchdog.plg
+          git add plugin/wg-watchdog.plg
+          if git diff --cached --quiet; then
+            echo "plg unchanged"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "release: ${{ steps.ver.outputs.version }} [skip ci]"
+          git push origin main
+
       - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ github.token }}

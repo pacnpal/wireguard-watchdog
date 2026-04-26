@@ -2,12 +2,12 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "wg-watchdog">
 <!ENTITY author    "pacnpal">
-<!ENTITY version   "@@VERSION@@">
-<!ENTITY md5       "@@MD5@@">
+<!ENTITY version   "2026.04.26">
+<!ENTITY md5       "e570aa8309879315c4941e3d8b32eea3">
 <!ENTITY launch    "Settings/wg-watchdog">
 <!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/plugin/wg-watchdog.plg">
-<!ENTITY pkg       "@@PKG@@">
+<!ENTITY pkg       "wg-watchdog-2026.04.26-noarch-1.txz">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>

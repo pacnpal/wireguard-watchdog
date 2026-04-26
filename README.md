@@ -45,7 +45,7 @@ Use it if you:
 1. Open the Unraid web UI → **Plugins** tab → **Install Plugin**.
 2. Paste the `.plg` URL:
    ```
-   https://github.com/pacnpal/wireguard-watchdog/releases/latest/download/wg-watchdog.plg
+   https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/plugin/wg-watchdog.plg
    ```
 3. Click **Install**. The plugin downloads its `.txz` from the matching
    GitHub release and installs to `/usr/local/emhttp/plugins/wg-watchdog/`.
