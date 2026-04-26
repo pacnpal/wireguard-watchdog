@@ -6,7 +6,7 @@
 <!ENTITY md5       "@@MD5@@">
 <!ENTITY launch    "Settings/wg-watchdog">
 <!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/wg-watchdog.plg">
+<!ENTITY pluginURL "https://github.com/pacnpal/wireguard-watchdog/releases/latest/download/wg-watchdog.plg">
 <!ENTITY pkg       "@@PKG@@">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">

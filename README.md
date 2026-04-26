@@ -45,7 +45,7 @@ Use it if you:
 1. Open the Unraid web UI → **Plugins** tab → **Install Plugin**.
 2. Paste the `.plg` URL:
    ```
-   https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/wg-watchdog.plg
+   https://github.com/pacnpal/wireguard-watchdog/releases/latest/download/wg-watchdog.plg
    ```
 3. Click **Install**. The plugin downloads its `.txz` from the matching
    GitHub release and installs to `/usr/local/emhttp/plugins/wg-watchdog/`.
@@ -107,9 +107,11 @@ GitHub Actions handles everything. From the repo's **Actions** tab →
 
 - Leave the version blank to use today's UTC date, or enter a specific
   `YYYY.MM.DD`.
-- The workflow builds the `.txz` + `.plg`, commits the updated
-  `wg-watchdog.plg` to `main`, creates the matching GitHub release, and
-  uploads both artifacts.
+- The workflow builds the `.txz` + `.plg`, creates the matching GitHub
+  release, and uploads both artifacts. The `.plg` is **release-only**
+  (not committed to `main`) — the install URL points to
+  `releases/latest/download/wg-watchdog.plg` so it always serves the
+  freshest manifest.
 
 Workflow file: [.github/workflows/release.yml](.github/workflows/release.yml).
 
@@ -126,9 +128,10 @@ Produces in `dist/`:
 - `wg-watchdog-<version>-noarch-1.txz` — the Slackware package.
 - `wg-watchdog.plg` — the manifest with the `.txz`'s md5 baked in.
 
-To release manually: create a GitHub release tagged `<version>`,
-upload the `.txz`, then commit `dist/wg-watchdog.plg` to `main` as
-`wg-watchdog.plg` at repo root.
+To release manually: create a GitHub release tagged `<version>` and
+upload **both** `dist/wg-watchdog-<version>-noarch-1.txz` and
+`dist/wg-watchdog.plg` as release assets. Don't commit the `.plg` to
+the repo — the install URL resolves to the latest release asset.
 
 The `.plg` references the `.txz` at:
 ```
@@ -218,8 +221,8 @@ wireguard-watchdog/
 ├── README.md
 ├── LICENSE
 ├── build.sh
-├── wg-watchdog.plg              # generated; updated by the release workflow
 ├── wg-watchdog.plg.in           # template; build.sh fills @@VERSION@@/@@MD5@@/@@PKG@@
+                                  # (the rendered .plg ships only as a release asset, not in main)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/{bug_report,feature_request}.yml
 │   └── workflows/{release,lint}.yml

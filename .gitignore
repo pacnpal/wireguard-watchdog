@@ -1,3 +1,4 @@
 dist/
+wg-watchdog.plg
 *.swp
 .DS_Store

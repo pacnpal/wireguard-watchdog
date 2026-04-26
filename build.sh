@@ -84,7 +84,8 @@ Built artifacts in $DIST:
     sha256 = $SHA
   $(basename "$PLG_OUT")
 
-Next: create a GitHub release tagged "${VERSION}" and upload ${PKG_FILE}.
-Then commit dist/${PLUGIN}.plg to the repo (or upload it to the same release)
-so users can install from its raw URL.
+Next: create a GitHub release tagged "${VERSION}" and upload BOTH the
+.txz and the .plg as release assets. The plugin install URL resolves
+to releases/latest/download/${PLUGIN}.plg, so the .plg should NOT be
+committed to git.
 EOF
