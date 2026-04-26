@@ -1,15 +1,44 @@
-# WireGuard Watchdog (Unraid plugin)
+<div align="center">
 
-A self-contained Unraid plugin that pings a peer through a WireGuard
-tunnel interface on a schedule, and bounces the tunnel via `wg-quick
-down/up` when the peer becomes unreachable. All settings (interface,
-peer IP, interval, enable/disable, verbose logging) are configured from
-**Settings → WG Watchdog**.
+<img src="assets/logo.png" alt="WireGuard Watchdog logo" width="160" height="160">
 
-> Requires the Unraid built-in WireGuard plugin and at least one
-> configured tunnel (`wg0`, `wg1`, …).
+# WireGuard Watchdog
 
----
+**An Unraid plugin that keeps your WireGuard tunnel healthy.**
+Pings a peer through the tunnel on a schedule; bounces the tunnel via
+`wg-quick down/up` the moment the peer goes silent.
+
+[![Latest release](https://img.shields.io/github/v/release/pacnpal/wireguard-watchdog?label=release&color=88171a)](https://github.com/pacnpal/wireguard-watchdog/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/pacnpal/wireguard-watchdog?color=blue)](LICENSE)
+[![Unraid 6.12+](https://img.shields.io/badge/Unraid-6.12%2B-f15a2c)](https://unraid.net/)
+[![Lint](https://img.shields.io/github/actions/workflow/status/pacnpal/wireguard-watchdog/lint.yml?branch=main&label=lint)](https://github.com/pacnpal/wireguard-watchdog/actions/workflows/lint.yml)
+[![Release workflow](https://img.shields.io/github/actions/workflow/status/pacnpal/wireguard-watchdog/release.yml?label=release%20build)](https://github.com/pacnpal/wireguard-watchdog/actions/workflows/release.yml)
+[![Downloads](https://img.shields.io/github/downloads/pacnpal/wireguard-watchdog/total?color=2ee4a3)](https://github.com/pacnpal/wireguard-watchdog/releases)
+
+</div>
+
+> [!IMPORTANT]
+> Requires the Unraid built-in **WireGuard** plugin and at least one
+> configured tunnel (`wg0`, `wg1`, …). The watchdog never touches `wg0`
+> directly — it only invokes `wg-quick`, the same interface Unraid uses
+> internally — so the two coexist cleanly.
+
+## Why?
+
+WireGuard is silent when it fails. A peer going down or a NAT mapping
+expiring leaves the tunnel "up" from the local side — `wg show` looks
+fine, but no traffic flows. The fix is always the same: bounce the
+tunnel. This plugin automates that bounce, gated behind a real
+liveness check (a ping through the interface, not just a check that
+the daemon exists).
+
+Use it if you:
+- run a site-to-site tunnel and want unattended recovery from the
+  remote side rebooting or losing internet briefly,
+- depend on the tunnel for critical traffic (Docker containers, VMs)
+  and don't want to babysit it,
+- want a quick visual confirmation in the UI that the tunnel is
+  reachable right now.
 
 ## Install
 
@@ -165,29 +194,43 @@ installed and a `wg0` tunnel configured against a reachable peer.
      `/usr/local/emhttp/plugins/wg-watchdog/` are gone.
    - Confirm `/var/log/wg-watchdog.log` is **preserved**.
 
+## Troubleshooting
+
+| Symptom | Likely cause | Where to look |
+|---|---|---|
+| **Test Now** prints `FAIL: interface wg0 does not exist` | Wrong interface name, or the Unraid WireGuard plugin isn't started. | Settings → VPN Manager. Run `wg show` in the terminal. |
+| Test passes, but cron never fires | Service disabled, or `update_cron` wasn't called after Apply. | `cat /etc/cron.d/wg-watchdog` should exist; `cat /boot/config/plugins/wg-watchdog/wg-watchdog.cfg` should show `SERVICE_ENABLED="yes"`. |
+| Bounces happen but tunnel stays down | The peer is genuinely unreachable, or `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg-quick up wg0: failed`; run it manually to see the error. |
+| Log says `skipped: previous run still in progress` repeatedly | A check is taking longer than the interval (DNS hangs, network stalls). | Lengthen the interval, or set `VERBOSE="no"` to suppress these messages. |
+| Log file fills the flash drive | Verbose left on for months. | Set Verbose=no, or rotate by truncating: `: > /var/log/wg-watchdog.log`. |
+| **View Log** says "log file not yet created" | First boot or just installed; nothing's run yet. | Click **Test Now** once. |
+
+For anything else, file an issue with the contents of
+`/boot/config/plugins/wg-watchdog/wg-watchdog.cfg` and the last ~50
+lines of `/var/log/wg-watchdog.log`.
+
 ## Repo layout
 
 ```
 wireguard-watchdog/
 ├── README.md
+├── LICENSE
 ├── build.sh
 ├── wg-watchdog.plg              # generated; updated by the release workflow
-├── wg-watchdog.plg.in           # template, build.sh fills @@VERSION@@/@@MD5@@/@@PKG@@
-├── .github/workflows/release.yml
-├── source/                      # everything below installs to /usr/local/emhttp/plugins/wg-watchdog/
+├── wg-watchdog.plg.in           # template; build.sh fills @@VERSION@@/@@MD5@@/@@PKG@@
+├── .github/
+│   ├── ISSUE_TEMPLATE/{bug_report,feature_request}.yml
+│   └── workflows/{release,lint}.yml
+├── assets/
+│   ├── logo.svg                 # source vector
+│   ├── logo{,-128,-512}.png     # rasterised by render-png.py
+│   └── render-png.py
+├── source/                      # installs to /usr/local/emhttp/plugins/wg-watchdog/
 │   ├── default.cfg
 │   ├── wg-watchdog.page
-│   ├── include/
-│   │   ├── apply.php
-│   │   ├── test.php
-│   │   └── log.php
-│   ├── scripts/
-│   │   ├── watchdog.sh
-│   │   ├── install_cron.sh
-│   │   └── remove_cron.sh
-│   └── event/
-│       ├── started
-│       └── stopping
+│   ├── include/{apply,test,log}.php
+│   ├── scripts/{watchdog,install_cron,remove_cron}.sh
+│   └── event/{started,stopping}
 └── dist/                        # produced by build.sh; not checked in
     ├── wg-watchdog-<version>-noarch-1.txz
     └── wg-watchdog.plg
@@ -204,3 +247,7 @@ wireguard-watchdog/
 - The watchdog uses `wg-quick down/up`, never `ip link` or direct
   `wg`-cli mutations, so it can't desync the Unraid WireGuard plugin's
   own state.
+
+## License
+
+[MIT](LICENSE).

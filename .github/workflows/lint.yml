@@ -1,0 +1,68 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+      - 'assets/**'
+      - 'wg-watchdog.plg'
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+      - 'assets/**'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck php-cli libxml2-utils
+
+      - name: bash -n on shell scripts
+        run: |
+          set -e
+          for f in source/scripts/*.sh source/event/* build.sh; do
+            echo "::group::bash -n $f"
+            bash -n "$f"
+            echo "::endgroup::"
+          done
+
+      - name: shellcheck (informational)
+        continue-on-error: true
+        run: |
+          shellcheck -s bash -S warning \
+            source/scripts/*.sh source/event/* build.sh || true
+
+      - name: php -l on PHP
+        run: |
+          set -e
+          for f in source/include/*.php; do
+            php -l "$f"
+          done
+
+      - name: Build smoke test
+        run: VERSION=9999.99.99 ./build.sh
+
+      - name: xmllint generated .plg
+        run: xmllint --noout dist/wg-watchdog.plg
+
+      - name: Verify .plg MD5 matches .txz
+        run: |
+          set -e
+          DECLARED=$(grep -oE '<MD5>[a-f0-9]{32}</MD5>' dist/wg-watchdog.plg | head -1 | sed 's|</\?MD5>||g')
+          ACTUAL=$(md5sum dist/wg-watchdog-9999.99.99-noarch-1.txz | awk '{print $1}')
+          if [ "$DECLARED" != "$ACTUAL" ]; then
+            echo "::error::MD5 mismatch: plg=$DECLARED txz=$ACTUAL"
+            exit 1
+          fi
+          echo "MD5 ok: $DECLARED"

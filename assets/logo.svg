@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 256 256" width="256" height="256"
+     role="img" aria-label="WireGuard Watchdog">
+  <title>WireGuard Watchdog</title>
+  <defs>
+    <linearGradient id="shieldFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#1e3a5f"/>
+      <stop offset="1"   stop-color="#0a1626"/>
+    </linearGradient>
+    <filter id="pulseGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Shield silhouette -->
+  <path d="M 36 32 L 220 32 L 220 132
+           C 220 184 178 220 128 240
+           C  78 220  36 184  36 132 Z"
+        fill="url(#shieldFill)"
+        stroke="#88171a" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- WireGuard-style W zigzag, top half -->
+  <path d="M 70 80 L 96 142 L 116 100 L 140 142 L 160 100 L 186 142"
+        fill="none" stroke="#ffffff" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ECG/heartbeat pulse, lower half -->
+  <path d="M 48 196 L 78 196 L 84 188 L 92 196 L 100 202
+           L 108 156 L 116 222 L 122 196 L 138 196
+           L 146 184 L 154 196 L 208 196"
+        fill="none" stroke="#2ee4a3" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"
+        filter="url(#pulseGlow)"/>
+</svg>

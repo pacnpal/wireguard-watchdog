@@ -1,0 +1,55 @@
+name: Bug report
+description: Something isn't working as expected.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: unraid_version
+    attributes:
+      label: Unraid version
+      placeholder: "7.2.x"
+    validations:
+      required: true
+
+  - type: input
+    id: plugin_version
+    attributes:
+      label: wg-watchdog version
+      description: Find it in Plugins tab or in /var/log/wg-watchdog.log.
+      placeholder: "2026.04.26"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe the unexpected behaviour and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: cfg
+    attributes:
+      label: Config
+      description: Paste the contents of /boot/config/plugins/wg-watchdog/wg-watchdog.cfg (redact peer IPs if sensitive).
+      render: bash
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log lines
+      description: Paste relevant lines from /var/log/wg-watchdog.log.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Tunnel details, network topology, what you've already tried.
+    validations:
+      required: false
