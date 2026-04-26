@@ -21,6 +21,7 @@ foreach ($defaults as $k => $v) {
 ?>
 
 <form markdown="1" method="POST" action="/plugins/wg-watchdog/include/apply.php" target="progressFrame">
+<input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>">
 
 _(Enabled)_:
 : <select name="SERVICE_ENABLED">
@@ -82,6 +83,7 @@ _(Log file)_:
      style="display:none;white-space:pre-wrap;font-family:monospace;background:#111;color:#eee;padding:10px;margin-top:10px;max-height:420px;overflow:auto;border-radius:4px;"></div>
 
 <script>
+var WG_CSRF = "<?=$var['csrf_token']?>";
 function wgWatchdogShow(text) {
     var out = document.getElementById('wg-watchdog-output');
     out.style.display = 'block';
@@ -89,14 +91,17 @@ function wgWatchdogShow(text) {
 }
 function wgTest() {
     wgWatchdogShow('Running test...');
-    fetch('/plugins/wg-watchdog/include/test.php', {method:'POST', credentials:'same-origin'})
+    var fd = new FormData();
+    fd.append('csrf_token', WG_CSRF);
+    fetch('/plugins/wg-watchdog/include/test.php', {method:'POST', body:fd, credentials:'same-origin'})
         .then(function(r){ return r.text(); })
         .then(function(t){ wgWatchdogShow(t || '(no output)'); })
         .catch(function(e){ wgWatchdogShow('Error: ' + e); });
 }
 function wgLog() {
     wgWatchdogShow('Loading log...');
-    fetch('/plugins/wg-watchdog/include/log.php', {credentials:'same-origin'})
+    fetch('/plugins/wg-watchdog/include/log.php?csrf_token=' + encodeURIComponent(WG_CSRF),
+          {credentials:'same-origin'})
         .then(function(r){ return r.text(); })
         .then(function(t){ wgWatchdogShow(t || '(log empty)'); })
         .catch(function(e){ wgWatchdogShow('Error: ' + e); });
