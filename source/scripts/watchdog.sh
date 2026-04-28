@@ -96,6 +96,43 @@ if [[ "$LOUD" == "yes" ]]; then
 fi
 log "FAIL: $PEER_IP unreachable via $INTERFACE -- bouncing tunnel"
 
+# Soft bounce: reset peer handshake state without disturbing host routing.
+# A full wg-quick down/up re-runs the conf's auto-routing -- when the conf
+# uses AllowedIPs=0.0.0.0/0 without Table=off (typical of imported VPN-
+# provider configs) wg-quick adds `ip rule not fwmark 51820 table 51820`,
+# which redirects every unmarked packet through the tunnel, including any
+# Docker container running with --network host. Removing peers via `wg set`
+# clears their session/cookie state and `wg syncconf` reinstates them from
+# the conf, so the next packet triggers a fresh handshake while routes,
+# addresses, and PostUp-installed iptables stay in place.
+if ip link show "$INTERFACE" >/dev/null 2>&1; then
+    PEERS=$(wg show "$INTERFACE" peers 2>/dev/null)
+    REMOVE_RC=0
+    for pk in $PEERS; do
+        if ! wg set "$INTERFACE" peer "$pk" remove 2>/dev/null; then
+            REMOVE_RC=1
+        fi
+    done
+
+    SYNC_OUT=$(wg syncconf "$INTERFACE" <(wg-quick strip "$INTERFACE") 2>&1)
+    SYNC_RC=$?
+
+    if [[ $REMOVE_RC -eq 0 && $SYNC_RC -eq 0 ]]; then
+        log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
+        [[ "$LOUD" == "yes" && -n "$SYNC_OUT" ]] && \
+            printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+        exit 0
+    fi
+
+    log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
+    [[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+fi
+
+# Hard bounce: interface is missing, or the soft path failed. wg-quick will
+# rebuild routes from the conf -- if the conf is a full-tunnel client this
+# WILL redirect host traffic through the interface (that is what wg-quick
+# does); add `Table = off` to the conf and manage routing yourself if you
+# don't want that.
 DOWN_OUT=$(wg-quick down "$INTERFACE" 2>&1)
 DOWN_RC=$?
 if [[ $DOWN_RC -eq 0 ]]; then
