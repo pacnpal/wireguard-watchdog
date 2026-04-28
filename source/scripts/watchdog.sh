@@ -154,11 +154,18 @@ ROUTING_BEFORE=$(routing_snapshot)
 # the interface is left up with no peers and the hard fallback (which
 # reads the same broken conf) likely also fails.
 SOFT_OK=no
-STRIPPED_CONF=$(wg-quick strip "$INTERFACE" 2>&1)
+# Keep stdout (the conf body fed to syncconf) and stderr (warnings,
+# error messages) separate -- merging them would corrupt the conf if
+# wg-quick ever prints to stderr while exiting 0.
+STRIP_ERR=$(mktemp)
+STRIPPED_CONF=$(wg-quick strip "$INTERFACE" 2>"$STRIP_ERR")
 STRIP_RC=$?
+STRIPPED_ERR_TXT=$(cat "$STRIP_ERR" 2>/dev/null)
+rm -f "$STRIP_ERR"
 if [[ $STRIP_RC -ne 0 || -z "$STRIPPED_CONF" ]]; then
     log "wg-quick strip $INTERFACE: failed (rc=$STRIP_RC) -- skipping soft bounce"
-    [[ "$LOUD" == "yes" ]] && printf '%s\n' "$STRIPPED_CONF" | log_each "strip: "
+    [[ "$LOUD" == "yes" && -n "$STRIPPED_ERR_TXT" ]] && \
+        printf '%s\n' "$STRIPPED_ERR_TXT" | log_each "strip: "
 else
     # Capture the live interface's full conf for rollback. If we remove
     # peers and then syncconf fails AND the hard fallback is refused

@@ -22,7 +22,10 @@ conf_redirect_prone() {
     [[ -f "$conf" && -r "$conf" ]] || return 1
 
     awk '
-        BEGIN { IGNORECASE = 1; section = ""; has_default = 0; table_off = 0 }
+        # IGNORECASE is gawk-only; rather than rely on it, every comparison
+        # below is done against tolower()ed values so this awk program is
+        # portable to mawk/busybox awk too.
+        BEGIN { section = ""; has_default = 0; table_off = 0 }
         { sub(/[[:space:]]*#.*$/, "") }                  # strip comments
         { gsub(/^[[:space:]]+|[[:space:]]+$/, "") }      # trim
         /^$/ { next }
