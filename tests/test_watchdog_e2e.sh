@@ -2,7 +2,7 @@
 # Integration tests for source/scripts/watchdog.sh
 #
 # Each test:
-#   1. Builds an isolated sandbox dir with mock wg/wg-quick/ip/ping/flock
+#   1. Builds an isolated sandbox dir with mock wg/wg-quick/ip/ping
 #      binaries on PATH plus a fake /etc/wireguard pointing at a fixture.
 #   2. Runs watchdog.sh in --test mode under the sandbox.
 #   3. Asserts on watchdog stdout (the --test log) and the mocks' call logs.
@@ -47,6 +47,21 @@ case "$1 $2" in
             echo "interface: wg0"
         fi
         ;;
+    "showconf wg0")
+        rc="${WGW_SHOWCONF_RC:-0}"
+        if [[ "$rc" == "0" ]]; then
+            echo "[Interface]"
+            echo "ListenPort = 51820"
+            while IFS= read -r pk; do
+                [[ -n "$pk" ]] || continue
+                echo
+                echo "[Peer]"
+                echo "PublicKey = $pk"
+                echo "AllowedIPs = 0.0.0.0/0"
+            done < "$WGW_TEST_DIR/state/peers"
+        fi
+        exit "$rc"
+        ;;
     "set wg0")
         if [[ "$3" == "peer" && "$5" == "remove" ]]; then
             rc="${WGW_PEER_REMOVE_RC:-0}"
@@ -62,7 +77,17 @@ case "$1 $2" in
         fi
         ;;
     "syncconf wg0")
-        rc="${WGW_SYNC_RC:-0}"
+        # Distinguish the soft-path sync (call #1) from the rollback
+        # sync (call #2, only fires when #1 fails). WGW_SYNC_RC governs
+        # the first; WGW_ROLLBACK_RC governs the second (default 0).
+        cnt_file="$WGW_TEST_DIR/state/syncconf_count"
+        cnt=$(( $(cat "$cnt_file" 2>/dev/null || echo 0) + 1 ))
+        echo "$cnt" > "$cnt_file"
+        if [[ "$cnt" == "1" ]]; then
+            rc="${WGW_SYNC_RC:-0}"
+        else
+            rc="${WGW_ROLLBACK_RC:-0}"
+        fi
         if [[ "$rc" == "0" && -f "$WGW_TEST_DIR/state/peers_canonical" ]]; then
             cp "$WGW_TEST_DIR/state/peers_canonical" "$WGW_TEST_DIR/state/peers"
         fi
@@ -278,16 +303,21 @@ assert_contains "logs wg-quick up ok"  "$out" "wg-quick up wg0: ok"
 assert_call     "wg-quick down wg0"    "$sb" "wg-quick" "down wg0"
 assert_call     "wg-quick up wg0"      "$sb" "wg-quick" "up wg0"
 
-run_case "T4: ping fails, sync fails, conf is PRONE & no fwmark -> hard bounce REFUSED (the user's bug)"
+run_case "T4: ping fails, sync fails, conf is PRONE & no fwmark -> hard bounce REFUSED, peers ROLLED BACK"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
 echo "off" > "$sb/state/fwmark"
+peers_before="$(cat "$sb/state/peers")"
 out="$(WGW_PING_RC=1 WGW_SYNC_RC=1 run_watchdog "$sb")"; rc=$?
 [[ $rc -eq 1 ]] && ok "exit 1 (refusal)" || fail "exit 1" "rc=$rc"
 assert_contains "logs REFUSING"     "$out" "REFUSING hard bounce"
+assert_contains "logs rollback"     "$out" "rollback restored pre-bounce peer set"
 assert_no_call  "wg-quick down NOT called" "$sb" "wg-quick" "down wg0"
 assert_no_call  "wg-quick up NOT called"   "$sb" "wg-quick" "up wg0"
 [[ ! -s "$sb/state/ip_rule_v4_added" ]] && ok "no redirect rule installed" || \
     fail "no redirect rule installed" "ip_rule_v4_added populated"
+peers_after="$(cat "$sb/state/peers")"
+[[ "$peers_before" == "$peers_after" ]] && ok "peers preserved via rollback" || \
+    fail "peers preserved via rollback" "before:$peers_before / after:$peers_after"
 
 run_case "T5: ping fails, sync fails, conf is PRONE but fwmark already active -> hard bounce ALLOWED (user opted in)"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"

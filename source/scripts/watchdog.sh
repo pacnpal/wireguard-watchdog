@@ -90,8 +90,14 @@ if [[ ! -f "$CONF_PATH" ]]; then
     log "FAIL: $INTERFACE is not configured under Settings -> VPN Manager (no $CONF_PATH)"
     if [[ "$LOUD" == "yes" ]]; then
         log "  configured tunnels:"
-        ls "$ETC_WIREGUARD"/*.conf 2>/dev/null | log_each "    " || \
+        # `cmd | log_each || log "(none)"` doesn't work: the pipeline's
+        # exit status is log_each's, which is always 0. Capture first.
+        CONF_LIST=$(ls "$ETC_WIREGUARD"/*.conf 2>/dev/null)
+        if [[ -n "$CONF_LIST" ]]; then
+            printf '%s\n' "$CONF_LIST" | log_each "    "
+        else
             log "    (none)"
+        fi
     fi
     exit 1
 fi
@@ -100,8 +106,12 @@ if ! ip link show "$INTERFACE" >/dev/null 2>&1; then
     log "FAIL: interface $INTERFACE does not exist (configured but not active -- start it under Settings -> VPN Manager)"
     if [[ "$LOUD" == "yes" ]]; then
         log "  active wg interfaces:"
-        wg show interfaces 2>/dev/null | tr ' ' '\n' | log_each "    " || \
+        ACTIVE_IFACES=$(wg show interfaces 2>/dev/null)
+        if [[ -n "$ACTIVE_IFACES" ]]; then
+            printf '%s\n' "$ACTIVE_IFACES" | tr ' ' '\n' | log_each "    "
+        else
             log "    (none)"
+        fi
     fi
     exit 1
 fi
@@ -150,29 +160,52 @@ if [[ $STRIP_RC -ne 0 || -z "$STRIPPED_CONF" ]]; then
     log "wg-quick strip $INTERFACE: failed (rc=$STRIP_RC) -- skipping soft bounce"
     [[ "$LOUD" == "yes" ]] && printf '%s\n' "$STRIPPED_CONF" | log_each "strip: "
 else
-    PEERS=$(wg show "$INTERFACE" peers 2>/dev/null)
-    REMOVE_RC=0
-    for pk in $PEERS; do
-        if ! wg set "$INTERFACE" peer "$pk" remove 2>/dev/null; then
-            REMOVE_RC=1
-        fi
-    done
-
-    SYNC_OUT=$(printf '%s\n' "$STRIPPED_CONF" | wg syncconf "$INTERFACE" /dev/stdin 2>&1)
-    SYNC_RC=$?
-
-    if [[ $SYNC_RC -eq 0 ]]; then
-        SOFT_OK=yes
-        if [[ $REMOVE_RC -eq 0 ]]; then
-            log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
-        else
-            log "wg syncconf $INTERFACE: ok (sync succeeded; some peers failed to pre-remove, routes preserved)"
-        fi
-        [[ "$LOUD" == "yes" && -n "$SYNC_OUT" ]] && \
-            printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+    # Capture the live interface's full conf for rollback. If we remove
+    # peers and then syncconf fails AND the hard fallback is refused
+    # (prone conf, no fwmark), we'd otherwise leave the interface up
+    # with no peers -- a worse half-state than we started in.
+    PRE_CONF=$(wg showconf "$INTERFACE" 2>&1)
+    PRE_CONF_RC=$?
+    if [[ $PRE_CONF_RC -ne 0 || -z "$PRE_CONF" ]]; then
+        log "wg showconf $INTERFACE: failed (rc=$PRE_CONF_RC) -- skipping soft bounce (no rollback state)"
+        [[ "$LOUD" == "yes" ]] && printf '%s\n' "$PRE_CONF" | log_each "showconf: "
     else
-        log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC)"
-        [[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+        PEERS=$(wg show "$INTERFACE" peers 2>/dev/null)
+        REMOVE_RC=0
+        for pk in $PEERS; do
+            if ! wg set "$INTERFACE" peer "$pk" remove 2>/dev/null; then
+                REMOVE_RC=1
+            fi
+        done
+
+        SYNC_OUT=$(printf '%s\n' "$STRIPPED_CONF" | wg syncconf "$INTERFACE" /dev/stdin 2>&1)
+        SYNC_RC=$?
+
+        if [[ $SYNC_RC -eq 0 ]]; then
+            SOFT_OK=yes
+            if [[ $REMOVE_RC -eq 0 ]]; then
+                log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
+            else
+                log "wg syncconf $INTERFACE: ok (sync succeeded; some peers failed to pre-remove, routes preserved)"
+            fi
+            [[ "$LOUD" == "yes" && -n "$SYNC_OUT" ]] && \
+                printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+        else
+            log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC)"
+            [[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+
+            # Best-effort rollback to pre-soft-bounce peer state, so a
+            # subsequent hard-bounce refusal doesn't leave us with no peers.
+            ROLLBACK_OUT=$(printf '%s\n' "$PRE_CONF" | wg syncconf "$INTERFACE" /dev/stdin 2>&1)
+            ROLLBACK_RC=$?
+            if [[ $ROLLBACK_RC -eq 0 ]]; then
+                log "wg syncconf $INTERFACE: rollback restored pre-bounce peer set"
+            else
+                log "wg syncconf $INTERFACE: rollback failed (rc=$ROLLBACK_RC) -- interface may be peerless"
+            fi
+            [[ "$LOUD" == "yes" && -n "$ROLLBACK_OUT" ]] && \
+                printf '%s\n' "$ROLLBACK_OUT" | log_each "rollback: "
+        fi
     fi
 fi
 
