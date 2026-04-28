@@ -185,11 +185,11 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
      itself stays up; only `wg-quick strip` will fail).
    - Click **Test Now** (or wait an interval).
    - Expect `wg-quick strip wg0: failed (rc=...) -- skipping soft
-     bounce, falling back to wg-quick down/up`, then
-     `wg-quick down wg0: ...` and `wg-quick up wg0: failed (rc=...)`
-     — the hard bounce will also fail because the conf is broken,
-     which is the point of the test (we just want to see the
-     fallback fire).
+     bounce`, then `soft bounce did not recover; evaluating hard
+     fallback`, then `wg-quick down wg0: ...` and `wg-quick up wg0:
+     failed (rc=...)` — the hard bounce will also fail because the
+     conf is broken, which is the point of the test (we just want
+     to see the fallback fire).
    - Confirm the live interface's peers are still intact via
      `wg show wg0` — the strip-first ordering means we never
      touched them when strip failed.
