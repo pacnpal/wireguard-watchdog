@@ -114,8 +114,19 @@ if ip link show "$INTERFACE" >/dev/null 2>&1; then
         fi
     done
 
-    SYNC_OUT=$(wg syncconf "$INTERFACE" <(wg-quick strip "$INTERFACE") 2>&1)
-    SYNC_RC=$?
+    # Capture and validate the stripped conf before handing it to syncconf:
+    # `wg syncconf <iface> <empty>` silently wipes every peer and exits 0,
+    # so an empty result from a missing/unreadable conf would look like a
+    # successful soft bounce while leaving the tunnel with no peers.
+    STRIPPED_CONF=$(wg-quick strip "$INTERFACE" 2>&1)
+    STRIP_RC=$?
+    if [[ $STRIP_RC -eq 0 && -n "$STRIPPED_CONF" ]]; then
+        SYNC_OUT=$(printf '%s\n' "$STRIPPED_CONF" | wg syncconf "$INTERFACE" /dev/stdin 2>&1)
+        SYNC_RC=$?
+    else
+        SYNC_RC=1
+        SYNC_OUT="$STRIPPED_CONF"
+    fi
 
     if [[ $REMOVE_RC -eq 0 && $SYNC_RC -eq 0 ]]; then
         log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
