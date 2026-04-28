@@ -91,7 +91,8 @@ echo "== routing_snapshot =="
 # Just smoke-test that it produces stable, parseable output.
 SNAP="$(routing_snapshot 2>/dev/null || true)"
 if [[ "$SNAP" == *"## ip -4 rule"* && "$SNAP" == *"## ip -6 rule"* && \
-      "$SNAP" == *"## ip -4 route show table all"* ]]; then
+      "$SNAP" == *"## ip -4 route show table all"* && \
+      "$SNAP" == *"## ip -6 route show table all"* ]]; then
     ok "routing_snapshot includes all four sections"
 else
     fail "routing_snapshot missing sections"

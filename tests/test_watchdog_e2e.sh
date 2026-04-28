@@ -16,6 +16,10 @@ FIXTURES="$TESTS_DIR/fixtures"
 PASS=0
 FAIL=0
 FAILED_NAMES=()
+SANDBOXES=()
+
+cleanup() { for d in "${SANDBOXES[@]}"; do [[ -n "$d" ]] && rm -rf "$d"; done; }
+trap cleanup EXIT
 
 ok()   { PASS=$((PASS+1)); printf '  \e[32mPASS\e[0m %s\n' "$1"; }
 fail() { FAIL=$((FAIL+1)); FAILED_NAMES+=("$1"); printf '  \e[31mFAIL\e[0m %s\n  %s\n' "$1" "${2:-}"; }
@@ -192,6 +196,7 @@ setup_sandbox() {
         | sed 's/^PublicKey *= *//' > "$sandbox/state/peers_canonical"
     cp "$sandbox/state/peers_canonical" "$sandbox/state/peers"
 
+    SANDBOXES+=("$sandbox")
     echo "$sandbox"
 }
 
@@ -249,7 +254,6 @@ assert_contains   "logs OK reachable" "$out" "OK: 10.99.0.1 reachable via wg0"
 assert_no_call    "no wg-quick down/up" "$sb" "wg-quick" "down"
 assert_no_call    "no wg-quick up"      "$sb" "wg-quick" "up"
 assert_no_call    "no wg syncconf"      "$sb" "wg" "syncconf"
-rm -rf "$sb"
 
 run_case "T2: ping fails, soft path succeeds -> exit 0, NO hard bounce, ip rule unchanged"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
@@ -263,7 +267,6 @@ assert_no_call    "no wg-quick up"       "$sb" "wg-quick" "up wg0"
 # Critical: no auto-routing rule was added on the live host.
 [[ ! -s "$sb/state/ip_rule_v4_added" ]] && ok "no fwmark rule appeared" || \
     fail "no fwmark rule appeared" "ip_rule_v4_added: $(cat "$sb/state/ip_rule_v4_added")"
-rm -rf "$sb"
 
 run_case "T3: ping fails, sync fails, conf is SAFE -> hard bounce executes"
 sb="$(setup_sandbox "$FIXTURES/safe_table_off.conf")"
@@ -274,7 +277,6 @@ assert_contains "logs evaluating hard" "$out" "evaluating hard fallback"
 assert_contains "logs wg-quick up ok"  "$out" "wg-quick up wg0: ok"
 assert_call     "wg-quick down wg0"    "$sb" "wg-quick" "down wg0"
 assert_call     "wg-quick up wg0"      "$sb" "wg-quick" "up wg0"
-rm -rf "$sb"
 
 run_case "T4: ping fails, sync fails, conf is PRONE & no fwmark -> hard bounce REFUSED (the user's bug)"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
@@ -286,7 +288,6 @@ assert_no_call  "wg-quick down NOT called" "$sb" "wg-quick" "down wg0"
 assert_no_call  "wg-quick up NOT called"   "$sb" "wg-quick" "up wg0"
 [[ ! -s "$sb/state/ip_rule_v4_added" ]] && ok "no redirect rule installed" || \
     fail "no redirect rule installed" "ip_rule_v4_added populated"
-rm -rf "$sb"
 
 run_case "T5: ping fails, sync fails, conf is PRONE but fwmark already active -> hard bounce ALLOWED (user opted in)"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
@@ -295,7 +296,6 @@ out="$(WGW_PING_RC=1 WGW_SYNC_RC=1 run_watchdog "$sb")"; rc=$?
 [[ $rc -eq 0 ]] && ok "exit 0 (after hard bounce)" || fail "exit 0" "rc=$rc"
 assert_not_contains "no REFUSING log" "$out" "REFUSING hard bounce"
 assert_call         "wg-quick up wg0" "$sb" "wg-quick" "up wg0"
-rm -rf "$sb"
 
 run_case "T6: ping fails, strip fails, conf is PRONE & no fwmark -> hard bounce REFUSED"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
@@ -308,7 +308,6 @@ assert_no_call  "wg-quick up NOT called" "$sb" "wg-quick" "up wg0"
 # Critical: peers NOT removed because strip failed first.
 [[ "$(cat "$sb/state/peers")" != "" ]] && ok "peers preserved (strip-first ordering)" || \
     fail "peers preserved" "peers were wiped"
-rm -rf "$sb"
 
 run_case "T7: ping fails, peer removal fails, sync still ok -> exit 0 (sync is source of truth)"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
@@ -316,7 +315,6 @@ out="$(WGW_PING_RC=1 WGW_PEER_REMOVE_RC=1 run_watchdog "$sb")"; rc=$?
 [[ $rc -eq 0 ]] && ok "exit 0" || fail "exit 0" "rc=$rc"
 assert_contains "logs partial peer note" "$out" "some peers failed to pre-remove"
 assert_no_call  "no hard bounce" "$sb" "wg-quick" "up wg0"
-rm -rf "$sb"
 
 run_case "T8: missing conf -> early exit, no bounce"
 sb="$(setup_sandbox "$FIXTURES/safe_restricted.conf")"
@@ -326,7 +324,6 @@ out="$(run_watchdog "$sb")"; rc=$?
 assert_contains "logs not configured" "$out" "is not configured under Settings"
 assert_no_call  "no ping called"      "$sb" "ping"     ""
 assert_no_call  "no wg-quick"         "$sb" "wg-quick" ""
-rm -rf "$sb"
 
 run_case "T9: interface absent -> early exit, no bounce"
 sb="$(setup_sandbox "$FIXTURES/safe_restricted.conf")"
@@ -335,7 +332,6 @@ out="$(run_watchdog "$sb")"; rc=$?
 [[ $rc -eq 1 ]] && ok "exit 1" || fail "exit 1" "rc=$rc"
 assert_contains "logs configured but not active" "$out" "configured but not active"
 assert_no_call  "no wg-quick"                    "$sb" "wg-quick" ""
-rm -rf "$sb"
 
 run_case "T10: regression for the original report -- prone conf, soft path succeeds, host routing UNCHANGED"
 sb="$(setup_sandbox "$FIXTURES/prone_default.conf")"
@@ -347,7 +343,6 @@ after_ip_rule="$(env WGW_TEST_DIR="$sb" PATH="$sb/bin:$PATH" ip -4 rule show)"
 [[ "$before_ip_rule" == "$after_ip_rule" ]] && ok "ip rule UNCHANGED across bounce (the bug fix invariant)" || \
     fail "ip rule changed" $'before:\n'"$before_ip_rule"$'\nafter:\n'"$after_ip_rule"
 assert_no_call "wg-quick up NEVER called" "$sb" "wg-quick" "up wg0"
-rm -rf "$sb"
 
 echo
 printf 'e2e tests: %d passed, %d failed\n' "$PASS" "$FAIL"
