@@ -100,11 +100,20 @@ you explicitly enable it.
      → `sleep 2` → `wg-quick up $INTERFACE`. A successful
      `wg syncconf` is taken as the source of truth — even if some
      peers failed to pre-remove — because it means the running
-     interface matches the on-disk conf. If `$INTERFACE` is missing
-     entirely, the check at the top of the script logs
-     `FAIL: interface ... does not exist` and exits — the watchdog
-     only heals an existing tunnel, it doesn't bring one up from cold
-     (that would re-trigger the very routing redirect described below).
+     interface matches the on-disk conf.
+  6. **The hard bounce is gated.** Before running it the watchdog
+     parses the conf and checks `wg show $INTERFACE fwmark`. If the
+     conf is "redirect-prone" — `AllowedIPs = 0.0.0.0/0` (or `::/0`)
+     without `Table = off` — AND no auto-routing fwmark is currently
+     set on the live interface, the hard bounce would newly install
+     `ip rule not fwmark <T> table <T>` and silently redirect all
+     unmarked host traffic (including any `--network host` Docker
+     container) through the tunnel. The watchdog refuses and exits 1
+     with an explanation; add `Table = off` to the conf to opt in.
+     If `$INTERFACE` is missing entirely, the precheck at the top
+     of the script logs `FAIL: interface ... does not exist` and
+     exits — the watchdog heals an existing tunnel, it does not
+     bring one up from cold.
 - `scripts/install_cron.sh` reads the cfg and writes
   `/boot/config/plugins/wg-watchdog/wg-watchdog.cron`, then calls
   `/usr/local/sbin/update_cron`. Unraid persists cron files from
@@ -223,7 +232,7 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
 | **Test Now** prints `FAIL: interface wg0 does not exist (configured but not active...)` | The conf exists but the tunnel is currently down. | Toggle the tunnel on under Settings → VPN Manager (or `wg-quick up wg0`). Verbose mode lists the active wg interfaces. |
 | Test passes, but cron never fires | Service disabled, or `update_cron` wasn't called after Apply. | `cat /etc/cron.d/wg-watchdog` should exist; `cat /boot/config/plugins/wg-watchdog/wg-watchdog.cfg` should show `SERVICE_ENABLED="yes"`. |
 | Bounces happen but tunnel stays down | The peer is genuinely unreachable, or the soft bounce isn't enough and `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg syncconf wg0: failed` followed by `wg-quick up wg0: failed`; run them manually to see the error. |
-| Bouncing redirects host / `--network host` Docker traffic through the tunnel | Hard-bounce path triggered (`wg syncconf` failed, or the interface disappeared mid-run) on a conf with `AllowedIPs = 0.0.0.0/0` and no `Table = off`. `wg-quick up` adds an `ip rule not fwmark ... table ...` that redirects every unmarked packet through the interface. If the interface is already missing at the initial check, the watchdog exits instead of bouncing. | Add `Table = off` to `[Interface]` in `/etc/wireguard/wg0.conf` and manage routes yourself via PostUp/PostDown — or accept the redirect (it is wg-quick's documented behavior for full-tunnel clients). |
+| Log says `REFUSING hard bounce: ... has AllowedIPs=0.0.0.0/0 ... without 'Table = off'` | The soft bounce didn't recover and the conf would cause `wg-quick up` to install `ip rule not fwmark ... table ...`, which redirects host (and `--network host` Docker) traffic. The watchdog refuses to inflict that. | Add `Table = off` to `[Interface]` in `/etc/wireguard/wg0.conf` and manage routes yourself via PostUp/PostDown — or, if you genuinely want full-tunnel redirect, run `wg-quick up wg0` once manually so the auto-routing fwmark is in place; the watchdog will then allow the hard bounce. |
 | Log says `skipped: previous run still in progress` repeatedly | A check is taking longer than the interval (DNS hangs, network stalls). | Lengthen the interval, or set `VERBOSE="no"` to suppress these messages. |
 | Log file fills the flash drive | Verbose left on for months. | Set Verbose=no, or rotate by truncating: `: > /var/log/wg-watchdog.log`. |
 | **View Log** says "log file not yet created" | First boot or just installed; nothing's run yet. | Click **Test Now** once. |
@@ -262,11 +271,14 @@ wireguard-watchdog/
 
 - The watchdog prefers `wg syncconf` (a strict re-application of the
   on-disk conf to the running interface). The hard `wg-quick down/up`
-  fallback only runs when the interface is missing or the soft path
-  fails. This is deliberate: a full `wg-quick up` re-creates the
-  conf's auto-routing, which on a `0.0.0.0/0` config without
-  `Table = off` redirects host traffic — including any Docker
-  container using `--network host` — through the tunnel.
+  fallback only runs when the soft path fails, and is itself gated
+  behind a redirect-prone-conf check: the script refuses to run a
+  hard bounce that would newly install wg-quick's auto-routing
+  (`ip rule not fwmark ... table ...`) on a host where it isn't
+  already in effect. This is the rigorous fix for the "redirected
+  host / `--network host` Docker traffic through wg0" report.
+- Tests live under `tests/`; run `bash tests/run.sh` locally. CI runs
+  them on every push and PR via `.github/workflows/lint.yml`.
 
 ## License
 

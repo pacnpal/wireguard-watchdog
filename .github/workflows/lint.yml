@@ -31,7 +31,7 @@ jobs:
       - name: bash -n on shell scripts
         run: |
           set -e
-          for f in source/scripts/*.sh source/event/* build.sh; do
+          for f in source/scripts/*.sh source/event/* build.sh tests/*.sh; do
             echo "::group::bash -n $f"
             bash -n "$f"
             echo "::endgroup::"
@@ -42,6 +42,9 @@ jobs:
         run: |
           shellcheck -s bash -S warning \
             source/scripts/*.sh source/event/* build.sh || true
+
+      - name: watchdog test suite
+        run: bash tests/run.sh
 
       - name: php -l on PHP
         run: |
