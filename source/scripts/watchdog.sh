@@ -57,12 +57,25 @@ fi
 
 [[ "$LOUD" == "yes" ]] && log "check start: interface=$INTERFACE peer=$PEER_IP pid=$$"
 
-if ! ip link show "$INTERFACE" >/dev/null 2>&1; then
-    log "FAIL: interface $INTERFACE does not exist"
+# Distinguish "tunnel not configured" from "tunnel configured but down":
+# Unraid's VPN Manager creates /etc/wireguard/<iface>.conf when you add a
+# tunnel, so its absence means the user has not set this tunnel up at all.
+if [[ ! -f "/etc/wireguard/$INTERFACE.conf" ]]; then
+    log "FAIL: $INTERFACE is not configured under Settings -> VPN Manager (no /etc/wireguard/$INTERFACE.conf)"
     if [[ "$LOUD" == "yes" ]]; then
-        log "  available wg interfaces:"
-        ip -br link show type wireguard 2>/dev/null | log_each "    " || \
-            log "    (none — is WireGuard configured under Settings -> VPN Manager?)"
+        log "  configured tunnels:"
+        ls /etc/wireguard/*.conf 2>/dev/null | log_each "    " || \
+            log "    (none)"
+    fi
+    exit 1
+fi
+
+if ! ip link show "$INTERFACE" >/dev/null 2>&1; then
+    log "FAIL: interface $INTERFACE does not exist (configured but not active -- start it under Settings -> VPN Manager)"
+    if [[ "$LOUD" == "yes" ]]; then
+        log "  active wg interfaces:"
+        wg show interfaces 2>/dev/null | tr ' ' '\n' | log_each "    " || \
+            log "    (none)"
     fi
     exit 1
 fi

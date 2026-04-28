@@ -213,7 +213,8 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
-| **Test Now** prints `FAIL: interface wg0 does not exist` | Wrong interface name, or the tunnel isn't started. | Settings → VPN Manager. Run `wg show` in the terminal. |
+| **Test Now** prints `FAIL: wg0 is not configured under Settings -> VPN Manager` | The conf file `/etc/wireguard/wg0.conf` is missing — VPN Manager creates it when you add a tunnel. Either the interface name in the watchdog cfg is wrong, or no tunnel exists yet. | Settings → VPN Manager. Verbose mode lists the configured `*.conf` files. |
+| **Test Now** prints `FAIL: interface wg0 does not exist (configured but not active...)` | The conf exists but the tunnel is currently down. | Toggle the tunnel on under Settings → VPN Manager (or `wg-quick up wg0`). Verbose mode lists the active wg interfaces. |
 | Test passes, but cron never fires | Service disabled, or `update_cron` wasn't called after Apply. | `cat /etc/cron.d/wg-watchdog` should exist; `cat /boot/config/plugins/wg-watchdog/wg-watchdog.cfg` should show `SERVICE_ENABLED="yes"`. |
 | Bounces happen but tunnel stays down | The peer is genuinely unreachable, or the soft bounce isn't enough and `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg syncconf wg0: failed` followed by `wg-quick up wg0: failed`; run them manually to see the error. |
 | Bouncing redirects host / `--network host` Docker traffic through the tunnel | Hard-bounce path triggered (interface was missing or `wg syncconf` failed) on a conf with `AllowedIPs = 0.0.0.0/0` and no `Table = off`. `wg-quick up` adds an `ip rule not fwmark ... table ...` that redirects every unmarked packet through the interface. | Add `Table = off` to `[Interface]` in `/etc/wireguard/wg0.conf` and manage routes yourself via PostUp/PostDown — or accept the redirect (it is wg-quick's documented behavior for full-tunnel clients). |
