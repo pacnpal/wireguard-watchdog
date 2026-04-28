@@ -93,9 +93,12 @@ you explicitly enable it.
      resets handshake/cookie state and forces a fresh handshake on the
      next packet **without** touching routes, ip rules, addresses, or
      PostUp-installed iptables.
-  5. Hard bounce only if the interface is missing, peer removal
-     fails, or `wg syncconf` fails: `wg-quick down $INTERFACE` →
-     `sleep 2` → `wg-quick up $INTERFACE`.
+  5. Hard bounce only if the interface is missing or `wg syncconf`
+     itself fails: `wg-quick down $INTERFACE` → `sleep 2` →
+     `wg-quick up $INTERFACE`. (A successful `wg syncconf` is taken
+     as the source of truth — even if some peers failed to pre-remove
+     — because it means the running interface matches the on-disk
+     conf.)
 - `scripts/install_cron.sh` reads the cfg and writes
   `/boot/config/plugins/wg-watchdog/wg-watchdog.cron`, then calls
   `/usr/local/sbin/update_cron`. Unraid persists cron files from

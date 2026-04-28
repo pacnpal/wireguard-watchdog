@@ -128,20 +128,25 @@ if ip link show "$INTERFACE" >/dev/null 2>&1; then
         SYNC_OUT="$STRIPPED_CONF"
     fi
 
-    if [[ $REMOVE_RC -eq 0 && $SYNC_RC -eq 0 ]]; then
-        log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
+    # syncconf is the source of truth: a successful sync means the running
+    # interface now matches the on-disk conf, regardless of whether the
+    # earlier per-peer `wg set ... remove` calls all worked (a peer might
+    # have already been gone, raced with another tool, etc). Treat that as
+    # a successful soft bounce and skip the hard fallback -- a hard bounce
+    # there would re-introduce the auto-routing this whole path exists to
+    # avoid.
+    if [[ $SYNC_RC -eq 0 ]]; then
+        if [[ $REMOVE_RC -eq 0 ]]; then
+            log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
+        else
+            log "wg syncconf $INTERFACE: ok (sync succeeded; some peers failed to pre-remove, routes preserved)"
+        fi
         [[ "$LOUD" == "yes" && -n "$SYNC_OUT" ]] && \
             printf '%s\n' "$SYNC_OUT" | log_each "sync: "
         exit 0
     fi
 
-    if [[ $REMOVE_RC -ne 0 && $SYNC_RC -ne 0 ]]; then
-        log "soft reset $INTERFACE: peer removal failed and wg syncconf failed (sync rc=$SYNC_RC) -- falling back to wg-quick down/up"
-    elif [[ $REMOVE_RC -ne 0 ]]; then
-        log "soft reset $INTERFACE: peer removal failed -- falling back to wg-quick down/up"
-    else
-        log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
-    fi
+    log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
     [[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
 fi
 
