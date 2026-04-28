@@ -170,12 +170,18 @@ else
     # Capture the live interface's full conf for rollback. If we remove
     # peers and then syncconf fails AND the hard fallback is refused
     # (prone conf, no fwmark), we'd otherwise leave the interface up
-    # with no peers -- a worse half-state than we started in.
-    PRE_CONF=$(wg showconf "$INTERFACE" 2>&1)
+    # with no peers -- a worse half-state than we started in. Keep
+    # stdout (the conf body) and stderr separate -- merging them would
+    # corrupt the rollback config piped back to `wg syncconf`.
+    SHOWCONF_ERR=$(mktemp)
+    PRE_CONF=$(wg showconf "$INTERFACE" 2>"$SHOWCONF_ERR")
     PRE_CONF_RC=$?
+    PRE_CONF_ERR_TXT=$(cat "$SHOWCONF_ERR" 2>/dev/null)
+    rm -f "$SHOWCONF_ERR"
     if [[ $PRE_CONF_RC -ne 0 || -z "$PRE_CONF" ]]; then
         log "wg showconf $INTERFACE: failed (rc=$PRE_CONF_RC) -- skipping soft bounce (no rollback state)"
-        [[ "$LOUD" == "yes" ]] && printf '%s\n' "$PRE_CONF" | log_each "showconf: "
+        [[ "$LOUD" == "yes" && -n "$PRE_CONF_ERR_TXT" ]] && \
+            printf '%s\n' "$PRE_CONF_ERR_TXT" | log_each "showconf: "
     else
         PEERS=$(wg show "$INTERFACE" peers 2>/dev/null)
         REMOVE_RC=0
