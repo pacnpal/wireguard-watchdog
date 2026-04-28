@@ -7,7 +7,8 @@
 **An Unraid plugin that keeps your WireGuard tunnel healthy.**
 Pings a peer through the tunnel on a schedule; resets peer state with
 `wg syncconf` the moment the peer goes silent, falling back to a full
-`wg-quick down/up` only when the interface is gone.
+`wg-quick down/up` only as a last resort when the soft path fails or
+the interface is gone.
 
 [![Latest release](https://img.shields.io/github/v/release/pacnpal/wireguard-watchdog?label=release&color=88171a)](https://github.com/pacnpal/wireguard-watchdog/releases/latest)
 [![License: MIT](https://img.shields.io/github/license/pacnpal/wireguard-watchdog?color=blue)](LICENSE)
@@ -92,9 +93,9 @@ you explicitly enable it.
      resets handshake/cookie state and forces a fresh handshake on the
      next packet **without** touching routes, ip rules, addresses, or
      PostUp-installed iptables.
-  5. Hard bounce only if the interface is missing or `wg syncconf`
-     fails: `wg-quick down $INTERFACE` → `sleep 2` → `wg-quick up
-     $INTERFACE`.
+  5. Hard bounce only if the interface is missing, peer removal
+     fails, or `wg syncconf` fails: `wg-quick down $INTERFACE` →
+     `sleep 2` → `wg-quick up $INTERFACE`.
 - `scripts/install_cron.sh` reads the cfg and writes
   `/boot/config/plugins/wg-watchdog/wg-watchdog.cron`, then calls
   `/usr/local/sbin/update_cron`. Unraid persists cron files from

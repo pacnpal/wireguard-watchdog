@@ -135,7 +135,13 @@ if ip link show "$INTERFACE" >/dev/null 2>&1; then
         exit 0
     fi
 
-    log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
+    if [[ $REMOVE_RC -ne 0 && $SYNC_RC -ne 0 ]]; then
+        log "soft reset $INTERFACE: peer removal failed and wg syncconf failed (sync rc=$SYNC_RC) -- falling back to wg-quick down/up"
+    elif [[ $REMOVE_RC -ne 0 ]]; then
+        log "soft reset $INTERFACE: peer removal failed -- falling back to wg-quick down/up"
+    else
+        log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
+    fi
     [[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
 fi
 
