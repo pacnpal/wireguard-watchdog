@@ -105,56 +105,56 @@ log "FAIL: $PEER_IP unreachable via $INTERFACE -- bouncing tunnel"
 # clears their session/cookie state and `wg syncconf` reinstates them from
 # the conf, so the next packet triggers a fresh handshake while routes,
 # addresses, and PostUp-installed iptables stay in place.
-if ip link show "$INTERFACE" >/dev/null 2>&1; then
-    PEERS=$(wg show "$INTERFACE" peers 2>/dev/null)
-    REMOVE_RC=0
-    for pk in $PEERS; do
-        if ! wg set "$INTERFACE" peer "$pk" remove 2>/dev/null; then
-            REMOVE_RC=1
-        fi
-    done
-
-    # Capture and validate the stripped conf before handing it to syncconf:
-    # `wg syncconf <iface> <empty>` silently wipes every peer and exits 0,
-    # so an empty result from a missing/unreadable conf would look like a
-    # successful soft bounce while leaving the tunnel with no peers.
-    STRIPPED_CONF=$(wg-quick strip "$INTERFACE" 2>&1)
-    STRIP_RC=$?
-    if [[ $STRIP_RC -eq 0 && -n "$STRIPPED_CONF" ]]; then
-        SYNC_OUT=$(printf '%s\n' "$STRIPPED_CONF" | wg syncconf "$INTERFACE" /dev/stdin 2>&1)
-        SYNC_RC=$?
-    else
-        SYNC_RC=1
-        SYNC_OUT="$STRIPPED_CONF"
+# The interface-existence check at the top of the script already exits if
+# $INTERFACE is missing, so by here we know it is up.
+PEERS=$(wg show "$INTERFACE" peers 2>/dev/null)
+REMOVE_RC=0
+for pk in $PEERS; do
+    if ! wg set "$INTERFACE" peer "$pk" remove 2>/dev/null; then
+        REMOVE_RC=1
     fi
+done
 
-    # syncconf is the source of truth: a successful sync means the running
-    # interface now matches the on-disk conf, regardless of whether the
-    # earlier per-peer `wg set ... remove` calls all worked (a peer might
-    # have already been gone, raced with another tool, etc). Treat that as
-    # a successful soft bounce and skip the hard fallback -- a hard bounce
-    # there would re-introduce the auto-routing this whole path exists to
-    # avoid.
-    if [[ $SYNC_RC -eq 0 ]]; then
-        if [[ $REMOVE_RC -eq 0 ]]; then
-            log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
-        else
-            log "wg syncconf $INTERFACE: ok (sync succeeded; some peers failed to pre-remove, routes preserved)"
-        fi
-        [[ "$LOUD" == "yes" && -n "$SYNC_OUT" ]] && \
-            printf '%s\n' "$SYNC_OUT" | log_each "sync: "
-        exit 0
-    fi
-
-    log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
-    [[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+# Capture and validate the stripped conf before handing it to syncconf:
+# `wg syncconf <iface> <empty>` silently wipes every peer and exits 0,
+# so an empty result from a missing/unreadable conf would look like a
+# successful soft bounce while leaving the tunnel with no peers.
+STRIPPED_CONF=$(wg-quick strip "$INTERFACE" 2>&1)
+STRIP_RC=$?
+if [[ $STRIP_RC -eq 0 && -n "$STRIPPED_CONF" ]]; then
+    SYNC_OUT=$(printf '%s\n' "$STRIPPED_CONF" | wg syncconf "$INTERFACE" /dev/stdin 2>&1)
+    SYNC_RC=$?
+else
+    SYNC_RC=1
+    SYNC_OUT="$STRIPPED_CONF"
 fi
 
-# Hard bounce: interface is missing, or the soft path failed. wg-quick will
-# rebuild routes from the conf -- if the conf is a full-tunnel client this
-# WILL redirect host traffic through the interface (that is what wg-quick
-# does); add `Table = off` to the conf and manage routing yourself if you
-# don't want that.
+# syncconf is the source of truth: a successful sync means the running
+# interface now matches the on-disk conf, regardless of whether the
+# earlier per-peer `wg set ... remove` calls all worked (a peer might
+# have already been gone, raced with another tool, etc). Treat that as
+# a successful soft bounce and skip the hard fallback -- a hard bounce
+# there would re-introduce the auto-routing this whole path exists to
+# avoid.
+if [[ $SYNC_RC -eq 0 ]]; then
+    if [[ $REMOVE_RC -eq 0 ]]; then
+        log "wg syncconf $INTERFACE: ok (peer state reset; routes preserved)"
+    else
+        log "wg syncconf $INTERFACE: ok (sync succeeded; some peers failed to pre-remove, routes preserved)"
+    fi
+    [[ "$LOUD" == "yes" && -n "$SYNC_OUT" ]] && \
+        printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+    exit 0
+fi
+
+log "wg syncconf $INTERFACE: failed (rc=$SYNC_RC) -- falling back to wg-quick down/up"
+[[ "$LOUD" == "yes" ]] && printf '%s\n' "$SYNC_OUT" | log_each "sync: "
+
+# Hard bounce: soft path failed. wg-quick will rebuild routes from the
+# conf -- if the conf is a full-tunnel client this WILL redirect host
+# traffic through the interface (that is what wg-quick does); add
+# `Table = off` to the conf and manage routing yourself if you don't
+# want that.
 DOWN_OUT=$(wg-quick down "$INTERFACE" 2>&1)
 DOWN_RC=$?
 if [[ $DOWN_RC -eq 0 ]]; then
