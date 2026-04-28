@@ -87,22 +87,24 @@ you explicitly enable it.
   2. Holds an exclusive `flock` on `/var/lock/wg-watchdog.lock` so
      overlapping cron firings can't trample each other.
   3. Runs `ping -c 2 -W 3 -I $INTERFACE $PEER_IP`.
-  4. On failure (soft bounce): drops every peer via
-     `wg set $INTERFACE peer <key> remove`, then re-applies the conf
-     with `wg syncconf $INTERFACE <(wg-quick strip $INTERFACE)`. This
-     resets handshake/cookie state and forces a fresh handshake on the
-     next packet **without** touching routes, ip rules, addresses, or
-     PostUp-installed iptables.
-  5. Hard bounce only if `wg syncconf` itself fails (malformed or
-     unreadable conf): `wg-quick down $INTERFACE` → `sleep 2` →
-     `wg-quick up $INTERFACE`. A successful `wg syncconf` is taken
-     as the source of truth — even if some peers failed to
-     pre-remove — because it means the running interface matches
-     the on-disk conf. If `$INTERFACE` is missing entirely, the
-     check at the top of the script logs `FAIL: interface ... does
-     not exist` and exits — the watchdog only heals an existing
-     tunnel, it doesn't bring one up from cold (that would
-     re-trigger the very routing redirect described below).
+  4. On failure (soft bounce): runs `wg-quick strip $INTERFACE` and
+     verifies the output is non-empty before touching any live state.
+     Only then does it drop every peer via
+     `wg set $INTERFACE peer <key> remove` and re-apply the stripped
+     conf with `wg syncconf $INTERFACE /dev/stdin`. This ordering
+     matters: if strip fails, the live interface is left untouched
+     and we go straight to the hard fallback — never an "interface
+     up but peers wiped" half-state.
+  5. Hard bounce only if `wg-quick strip` or `wg syncconf` itself
+     fails (malformed or unreadable conf): `wg-quick down $INTERFACE`
+     → `sleep 2` → `wg-quick up $INTERFACE`. A successful
+     `wg syncconf` is taken as the source of truth — even if some
+     peers failed to pre-remove — because it means the running
+     interface matches the on-disk conf. If `$INTERFACE` is missing
+     entirely, the check at the top of the script logs
+     `FAIL: interface ... does not exist` and exits — the watchdog
+     only heals an existing tunnel, it doesn't bring one up from cold
+     (that would re-trigger the very routing redirect described below).
 - `scripts/install_cron.sh` reads the cfg and writes
   `/boot/config/plugins/wg-watchdog/wg-watchdog.cron`, then calls
   `/usr/local/sbin/update_cron`. Unraid persists cron files from
@@ -173,11 +175,15 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
      printf 'garbage\n' > /etc/wireguard/wg0.conf` (the interface
      itself stays up; only `wg-quick strip` will fail).
    - Click **Test Now** (or wait an interval).
-   - Expect `wg syncconf wg0: failed (rc=...)` followed by
+   - Expect `wg-quick strip wg0: failed (rc=...) -- skipping soft
+     bounce, falling back to wg-quick down/up`, then
      `wg-quick down wg0: ...` and `wg-quick up wg0: failed (rc=...)`
      — the hard bounce will also fail because the conf is broken,
      which is the point of the test (we just want to see the
      fallback fire).
+   - Confirm the live interface's peers are still intact via
+     `wg show wg0` — the strip-first ordering means we never
+     touched them when strip failed.
    - Restore: `mv /etc/wireguard/wg0.conf.bak /etc/wireguard/wg0.conf`
      and bring the tunnel back up via VPN Manager or `wg-quick up wg0`.
 
@@ -217,7 +223,7 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
 | **Test Now** prints `FAIL: interface wg0 does not exist (configured but not active...)` | The conf exists but the tunnel is currently down. | Toggle the tunnel on under Settings → VPN Manager (or `wg-quick up wg0`). Verbose mode lists the active wg interfaces. |
 | Test passes, but cron never fires | Service disabled, or `update_cron` wasn't called after Apply. | `cat /etc/cron.d/wg-watchdog` should exist; `cat /boot/config/plugins/wg-watchdog/wg-watchdog.cfg` should show `SERVICE_ENABLED="yes"`. |
 | Bounces happen but tunnel stays down | The peer is genuinely unreachable, or the soft bounce isn't enough and `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg syncconf wg0: failed` followed by `wg-quick up wg0: failed`; run them manually to see the error. |
-| Bouncing redirects host / `--network host` Docker traffic through the tunnel | Hard-bounce path triggered (interface was missing or `wg syncconf` failed) on a conf with `AllowedIPs = 0.0.0.0/0` and no `Table = off`. `wg-quick up` adds an `ip rule not fwmark ... table ...` that redirects every unmarked packet through the interface. | Add `Table = off` to `[Interface]` in `/etc/wireguard/wg0.conf` and manage routes yourself via PostUp/PostDown — or accept the redirect (it is wg-quick's documented behavior for full-tunnel clients). |
+| Bouncing redirects host / `--network host` Docker traffic through the tunnel | Hard-bounce path triggered (`wg syncconf` failed, or the interface disappeared mid-run) on a conf with `AllowedIPs = 0.0.0.0/0` and no `Table = off`. `wg-quick up` adds an `ip rule not fwmark ... table ...` that redirects every unmarked packet through the interface. If the interface is already missing at the initial check, the watchdog exits instead of bouncing. | Add `Table = off` to `[Interface]` in `/etc/wireguard/wg0.conf` and manage routes yourself via PostUp/PostDown — or accept the redirect (it is wg-quick's documented behavior for full-tunnel clients). |
 | Log says `skipped: previous run still in progress` repeatedly | A check is taking longer than the interval (DNS hangs, network stalls). | Lengthen the interval, or set `VERBOSE="no"` to suppress these messages. |
 | Log file fills the flash drive | Verbose left on for months. | Set Verbose=no, or rotate by truncating: `: > /var/log/wg-watchdog.log`. |
 | **View Log** says "log file not yet created" | First boot or just installed; nothing's run yet. | Click **Test Now** once. |
