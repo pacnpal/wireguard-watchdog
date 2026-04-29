@@ -30,13 +30,13 @@ wireguard-watchdog/
 ├── assets/                # logos (svg + rasterised PNGs from render-png.py)
 ├── source/                # gets staged into /usr/local/emhttp/plugins/wg-watchdog/
 │   ├── default.cfg        # seeded to /boot/config/plugins/wg-watchdog/wg-watchdog.cfg on first install
-│   ├── wg-watchdog.page   # Unraid PHP/markdown UI page (Tools → User Utilities)
+│   ├── wg-watchdog.page   # Unraid PHP/markdown UI page (Tools -> User Utilities)
 │   ├── wg-watchdog.png    # plugin icon (copy of assets/logo-128.png)
 │   ├── include/{test,log,clear}.php   # AJAX endpoints invoked by the page
 │   ├── scripts/
 │   │   ├── watchdog.sh           # the only thing scheduled by cron
 │   │   ├── lib.sh                # pure helpers, sourced by watchdog.sh
-│   │   ├── install_cron.sh       # cfg → /boot/.../wg-watchdog.cron + update_cron
+│   │   ├── install_cron.sh       # cfg -> /boot/.../wg-watchdog.cron + update_cron
 │   │   └── remove_cron.sh
 │   └── event/{started,stopping}  # Unraid array event hooks
 ├── tests/
@@ -55,16 +55,16 @@ wireguard-watchdog/
 
 `scripts/watchdog.sh` is the heart of the project. Two-tier recovery:
 
-1. **Soft bounce** (default path): `wg-quick strip` → validate non-empty →
-   snapshot the live conf via `wg showconf` for rollback → remove every live
-   peer (`wg set <iface> peer <key> remove`) → re-apply the stripped conf with
+1. **Soft bounce** (default path): `wg-quick strip` -> validate non-empty ->
+   snapshot the live conf via `wg showconf` for rollback -> remove every live
+   peer (`wg set <iface> peer <key> remove`) -> re-apply the stripped conf with
    `wg syncconf <iface> /dev/stdin`. This resets per-peer crypto state without
    touching ip rules, routes, or iptables. If `wg syncconf` fails after peers
    were removed, the script attempts a **rollback** by piping the saved
    pre-bounce conf back through `wg syncconf`.
 
 2. **Hard bounce** (last resort, only if soft path didn't recover):
-   `wg-quick down` → `sleep 2` → `wg-quick up`. **Gated** by a
+   `wg-quick down` -> `sleep 2` -> `wg-quick up`. **Gated** by a
    redirect-prone-conf check before it runs.
 
 ### The "redirect-prone" gate (why it exists)
@@ -124,7 +124,9 @@ Files on the live host:
   to `/etc/cron.d/wg-watchdog`
 - `/var/lock/wg-watchdog.lock` — `flock`'d so overlapping cron firings can't
   trample each other
-- `/var/log/wg-watchdog.log` — preserved on uninstall
+- `/var/log/wg-watchdog.log` — not removed on uninstall (but `/var/log`
+  is tmpfs on Unraid, so the file does not persist across reboots; the
+  install hook re-`touch`es it on next install)
 
 Sub-minute intervals (< 60s) are emitted as multiple per-minute cron lines
 with `sleep` offsets — see `install_cron.sh` for the exact shape.
@@ -160,7 +162,7 @@ VERSION=2026.05.01 ./build.sh # explicit version
 Stages `source/` into a tmpdir mirroring `/usr/local/emhttp/plugins/wg-watchdog/`,
 chmods scripts/event hooks to 0755 and `.page`/`.php`/`.cfg` to 0644, writes
 `install/slack-desc`, builds a deterministic `tar -cJf` (root-owned, sorted),
-then renders `wg-watchdog.plg.in` → `dist/wg-watchdog.plg` substituting
+then renders `wg-watchdog.plg.in` -> `dist/wg-watchdog.plg` substituting
 `@@VERSION@@`/`@@MD5@@`/`@@PKG@@`. Output goes to `dist/` (gitignored).
 **Do not commit `dist/`.**
 
@@ -169,20 +171,20 @@ built and attached by the workflow.
 
 ### Release
 
-Manual: GitHub Actions → **Build and Release** → Run workflow. Optionally
+Manual: GitHub Actions -> **Build and Release** -> Run workflow. Optionally
 supply `version: YYYY.MM.DD` (defaults to UTC today). The workflow:
 
 1. Runs `./build.sh` with the chosen version.
 2. Validates the `.plg` (`xmllint`) and that its declared MD5 matches the
    built `.txz`.
-3. Copies `dist/wg-watchdog.plg` → `plugin/wg-watchdog.plg` and commits to
+3. Copies `dist/wg-watchdog.plg` -> `plugin/wg-watchdog.plg` and commits to
    `main` (`release: <version> [skip ci]`).
 4. Creates the GitHub release tagged `<version>` and uploads both
    `wg-watchdog-<version>-noarch-1.txz` and `wg-watchdog.plg` as assets,
    `--clobber` enabled.
 
 End users install by pasting the raw `plugin/wg-watchdog.plg` URL on `main`
-into Unraid's **Plugins → Install Plugin**; the `.plg` then downloads the
+into Unraid's **Plugins -> Install Plugin**; the `.plg` then downloads the
 matching `.txz` from the release. **Never hand-edit `plugin/wg-watchdog.plg`** —
 it's a build artifact regenerated each release.
 
@@ -229,8 +231,10 @@ the key affects scheduling.
 - **Versioning is `YYYY.MM.DD`.** No semver. Older `.txz` files in
   `/boot/config/plugins/wg-watchdog/` are auto-cleaned by the `.plg`
   pre-install step.
-- **Markdown style** in README/CLAUDE.md uses ASCII punctuation (`--`, `->`)
-  rather than `—`/`→` in code/log examples; prose can use unicode.
+- **Markdown style** in this file uses ASCII arrows (`->`) everywhere —
+  arrows often appear in flow descriptions that read like pseudo-code, so
+  keep them ASCII for grep-ability. Em dashes (`—`) are used in prose only;
+  ASCII `--` appears inside code/log examples to match the script logs.
 
 ## Branching
 
