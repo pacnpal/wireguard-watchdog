@@ -41,7 +41,7 @@ jobs:
         continue-on-error: true
         run: |
           shellcheck -s bash -S warning \
-            source/scripts/*.sh source/event/* build.sh || true
+            source/scripts/*.sh source/event/* build.sh tests/*.sh || true
 
       - name: watchdog test suite
         run: bash tests/run.sh

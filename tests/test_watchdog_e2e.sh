@@ -120,9 +120,9 @@ case "$1" in
         rc="${WGW_UP_RC:-0}"
         if [[ "$rc" == "0" ]]; then
             echo "$2" > "$WGW_TEST_DIR/state/iface_up"
-            if grep -qE '^[[:space:]]*AllowedIPs[[:space:]]*=.*(0\.0\.0\.0/0|::/0)' \
+            if grep -qiE '^[[:space:]]*AllowedIPs[[:space:]]*=.*(0\.0\.0\.0/0|::/0)' \
                   "$ETC_WIREGUARD/$2.conf" \
-               && ! grep -qE '^[[:space:]]*Table[[:space:]]*=[[:space:]]*off' \
+               && ! grep -qiE '^[[:space:]]*Table[[:space:]]*=[[:space:]]*off([[:space:]]*($|#))?' \
                        "$ETC_WIREGUARD/$2.conf"; then
                 echo "0xca6c" > "$WGW_TEST_DIR/state/fwmark"
                 echo "not from all fwmark 0xca6c lookup 51820" \
