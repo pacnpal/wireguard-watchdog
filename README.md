@@ -5,8 +5,10 @@
 # WireGuard Watchdog
 
 **An Unraid plugin that keeps your WireGuard tunnel healthy.**
-Pings a peer through the tunnel on a schedule; bounces the tunnel via
-`wg-quick down/up` the moment the peer goes silent.
+Pings a peer through the tunnel on a schedule; resets peer state with
+`wg syncconf` the moment the peer goes silent, falling back to a full
+`wg-quick down/up` only as a last resort when the soft recovery path
+fails.
 
 [![Latest release](https://img.shields.io/github/v/release/pacnpal/wireguard-watchdog?label=release&color=88171a)](https://github.com/pacnpal/wireguard-watchdog/releases/latest)
 [![License: MIT](https://img.shields.io/github/license/pacnpal/wireguard-watchdog?color=blue)](LICENSE)
@@ -20,8 +22,8 @@ Pings a peer through the tunnel on a schedule; bounces the tunnel via
 > [!IMPORTANT]
 > Requires Unraid's built-in **WireGuard** support (Settings → VPN
 > Manager) and at least one configured tunnel (`wg0`, `wg1`, …). The
-> watchdog never touches `wg0` directly — it only invokes `wg-quick`,
-> the same tool Unraid uses internally — so the two coexist cleanly.
+> watchdog uses `wg syncconf` (and, only as a last resort, `wg-quick`),
+> the same tools Unraid uses internally — so the two coexist cleanly.
 
 ## Why?
 
@@ -85,8 +87,33 @@ you explicitly enable it.
   2. Holds an exclusive `flock` on `/var/lock/wg-watchdog.lock` so
      overlapping cron firings can't trample each other.
   3. Runs `ping -c 2 -W 3 -I $INTERFACE $PEER_IP`.
-  4. On failure: `wg-quick down $INTERFACE` → `sleep 2` → `wg-quick up
-     $INTERFACE`, logging each step.
+  4. On failure (soft bounce): runs `wg-quick strip $INTERFACE` and
+     verifies the output is non-empty before touching any live state.
+     Only then does it drop every peer via
+     `wg set $INTERFACE peer <key> remove` and re-apply the stripped
+     conf with `wg syncconf $INTERFACE /dev/stdin`. This ordering
+     matters: if strip fails, the live interface is left untouched
+     and we go straight to the hard fallback — never an "interface
+     up but peers wiped" half-state.
+  5. Hard bounce only if `wg-quick strip` or `wg syncconf` itself
+     fails (malformed or unreadable conf): `wg-quick down $INTERFACE`
+     → `sleep 2` → `wg-quick up $INTERFACE`. A successful
+     `wg syncconf` is taken as the source of truth — even if some
+     peers failed to pre-remove — because it means the running
+     interface matches the on-disk conf.
+  6. **The hard bounce is gated.** Before running it the watchdog
+     parses the conf and checks `wg show $INTERFACE fwmark`. If the
+     conf is "redirect-prone" — `AllowedIPs = 0.0.0.0/0` (or `::/0`)
+     without `Table = off` — AND no auto-routing fwmark is currently
+     set on the live interface, the hard bounce would newly install
+     `ip rule not fwmark <T> table <T>` and silently redirect all
+     unmarked host traffic (including any `--network host` Docker
+     container) through the tunnel. The watchdog refuses and exits 1
+     with an explanation; add `Table = off` to the conf to opt in.
+     If `$INTERFACE` is missing entirely, the precheck at the top
+     of the script logs `FAIL: interface ... does not exist` and
+     exits — the watchdog heals an existing tunnel, it does not
+     bring one up from cold.
 - `scripts/install_cron.sh` reads the cfg and writes
   `/boot/config/plugins/wg-watchdog/wg-watchdog.cron`, then calls
   `/usr/local/sbin/update_cron`. Unraid persists cron files from
@@ -95,8 +122,14 @@ you explicitly enable it.
 - `event/stopping` removes the active cron entry so no checks fire
   during shutdown.
 
-The plugin **never touches `wg0` directly** — only `wg-quick`, the same
-tool Unraid's built-in WireGuard uses. The two coexist cleanly.
+The plugin uses the same tools as Unraid's built-in WireGuard
+(`wg`, `wg-quick`). The soft-bounce path was chosen specifically to
+avoid an `wg-quick down`/`up` side effect: when a conf has
+`AllowedIPs = 0.0.0.0/0` without `Table = off` (typical of imported
+VPN-provider configs), `wg-quick up` adds an `ip rule not fwmark
+51820 table 51820` rule that funnels every unmarked packet through the
+tunnel — which redirects host traffic, including any Docker container
+running with `--network host`. `wg syncconf` doesn't do that.
 
 ## Build & release
 
@@ -133,32 +166,59 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
    - Click **Test Now**.
    - Expect output containing `OK: <peer> reachable via wg0`.
 
-5. **Failure simulation**
-   - From SSH: `wg-quick down wg0` to break the tunnel.
+5. **Failure simulation (soft path)**
+   - With `wg0` up, change the peer's PublicKey on the remote side
+     (or block the peer's UDP port on the remote firewall) so the
+     handshake stops working but the local interface stays up.
    - Wait one cron interval (or click **Test Now** to force).
    - Expect log entry `FAIL: ... unreachable via wg0 -- bouncing tunnel`,
-     followed by `wg-quick down wg0: ok` (or "failed (continuing)" since
-     the interface is already down) and `wg-quick up wg0: ok`.
-   - Verify `wg show wg0` reports the interface back up and a fresh
-     handshake.
+     followed by `wg syncconf wg0: ok (peer state reset; routes preserved)`.
+   - Confirm `ip rule show` and `ip route show table all` are unchanged
+     vs. before the bounce.
+   - Restore the peer; expect a fresh handshake within ~5 s of the next
+     ping.
 
-6. **Lock contention**
+6. **Failure simulation (hard path)**
+   - With `wg0` up, make `wg syncconf` fail by temporarily corrupting
+     the on-disk conf, e.g.: `mv /etc/wireguard/wg0.conf{,.bak} && \
+     printf 'garbage\n' > /etc/wireguard/wg0.conf` (the interface
+     itself stays up; only `wg-quick strip` will fail).
+   - Click **Test Now** (or wait an interval).
+   - Expect `wg-quick strip wg0: failed (rc=...) -- skipping soft
+     bounce`, then `soft bounce did not recover; evaluating hard
+     fallback`, then `wg-quick down wg0: ...` and `wg-quick up wg0:
+     failed (rc=...)` — the hard bounce will also fail because the
+     conf is broken, which is the point of the test (we just want
+     to see the fallback fire).
+   - Confirm the live interface's peers are still intact via
+     `wg show wg0` — the strip-first ordering means we never
+     touched them when strip failed.
+   - Restore: `mv /etc/wireguard/wg0.conf.bak /etc/wireguard/wg0.conf`
+     and bring the tunnel back up via VPN Manager or `wg-quick up wg0`.
+
+7. **Interface-missing exit**
+   - From SSH: `wg-quick down wg0`.
+   - Click **Test Now**.
+   - Expect `FAIL: interface wg0 does not exist` and exit 1 — no
+     bounce, no `wg-quick up`. Restore via VPN Manager.
+
+8. **Lock contention**
    - Set `INTERVAL = 20`, click **Apply**.
    - Tail the log; with verbose enabled, confirm only one run executes
      at a time even with overlapping firings.
 
-7. **Persistence**
+9. **Persistence**
    - Reboot the server.
    - After array start, confirm `/etc/cron.d/wg-watchdog` is back
      (regenerated by `event/started`).
    - Confirm log contains an `event: started` entry.
 
-8. **Disable**
-   - Set `Enabled = no`, **Apply**.
-   - Confirm both `/boot/config/.../wg-watchdog.cron` and
-     `/etc/cron.d/wg-watchdog` are gone.
+10. **Disable**
+    - Set `Enabled = no`, **Apply**.
+    - Confirm both `/boot/config/.../wg-watchdog.cron` and
+      `/etc/cron.d/wg-watchdog` are gone.
 
-9. **Uninstall**
+11. **Uninstall**
    - Remove the plugin from the Plugins tab.
    - Confirm `/boot/config/plugins/wg-watchdog/` and
      `/usr/local/emhttp/plugins/wg-watchdog/` are gone.
@@ -168,9 +228,11 @@ Tested target: Unraid 7.2.x in a VM with a `wg0` tunnel configured in
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
-| **Test Now** prints `FAIL: interface wg0 does not exist` | Wrong interface name, or the tunnel isn't started. | Settings → VPN Manager. Run `wg show` in the terminal. |
+| **Test Now** prints `FAIL: wg0 is not configured under Settings -> VPN Manager` | The conf file `/etc/wireguard/wg0.conf` is missing — VPN Manager creates it when you add a tunnel. Either the interface name in the watchdog cfg is wrong, or no tunnel exists yet. | Settings → VPN Manager. Verbose mode lists the configured `*.conf` files. |
+| **Test Now** prints `FAIL: interface wg0 does not exist (configured but not active...)` | The conf exists but the tunnel is currently down. | Toggle the tunnel on under Settings → VPN Manager (or `wg-quick up wg0`). Verbose mode lists the active wg interfaces. |
 | Test passes, but cron never fires | Service disabled, or `update_cron` wasn't called after Apply. | `cat /etc/cron.d/wg-watchdog` should exist; `cat /boot/config/plugins/wg-watchdog/wg-watchdog.cfg` should show `SERVICE_ENABLED="yes"`. |
-| Bounces happen but tunnel stays down | The peer is genuinely unreachable, or `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg-quick up wg0: failed`; run it manually to see the error. |
+| Bounces happen but tunnel stays down | The peer is genuinely unreachable, or the soft bounce isn't enough and `wg-quick up` is failing. | Tail `/var/log/wg-watchdog.log` for `wg syncconf wg0: failed` followed by `wg-quick up wg0: failed`; run them manually to see the error. |
+| Log says `REFUSING hard bounce: ... has AllowedIPs=0.0.0.0/0 ... without 'Table = off'` | The soft bounce didn't recover and the conf would cause `wg-quick up` to install `ip rule not fwmark ... table ...`, which redirects host (and `--network host` Docker) traffic. The watchdog refuses to inflict that. | Add `Table = off` to `[Interface]` in `/etc/wireguard/wg0.conf` and manage routes yourself via PostUp/PostDown — or, if you genuinely want full-tunnel redirect, run `wg-quick up wg0` once manually so the auto-routing fwmark is in place; the watchdog will then allow the hard bounce. |
 | Log says `skipped: previous run still in progress` repeatedly | A check is taking longer than the interval (DNS hangs, network stalls). | Lengthen the interval, or set `VERBOSE="no"` to suppress these messages. |
 | Log file fills the flash drive | Verbose left on for months. | Set Verbose=no, or rotate by truncating: `: > /var/log/wg-watchdog.log`. |
 | **View Log** says "log file not yet created" | First boot or just installed; nothing's run yet. | Click **Test Now** once. |
@@ -207,9 +269,16 @@ wireguard-watchdog/
 
 ## Notes
 
-- The watchdog uses `wg-quick down/up`, never `ip link` or direct
-  `wg`-cli mutations, so it can't desync Unraid's built-in tunnel
-  management.
+- The watchdog prefers `wg syncconf` (a strict re-application of the
+  on-disk conf to the running interface). The hard `wg-quick down/up`
+  fallback only runs when the soft path fails, and is itself gated
+  behind a redirect-prone-conf check: the script refuses to run a
+  hard bounce that would newly install wg-quick's auto-routing
+  (`ip rule not fwmark ... table ...`) on a host where it isn't
+  already in effect. This is the rigorous fix for the "redirected
+  host / `--network host` Docker traffic through wg0" report.
+- Tests live under `tests/`; run `bash tests/run.sh` locally. CI runs
+  them on every push and PR via `.github/workflows/lint.yml`.
 
 ## License
 
