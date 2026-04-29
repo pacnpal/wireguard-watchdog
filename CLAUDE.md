@@ -155,9 +155,13 @@ instead of the log, and is verbose by default.
 ### Local build
 
 ```sh
-./build.sh                    # version = today's UTC date (YYYY.MM.DD)
+./build.sh                    # version = today's local date (YYYY.MM.DD)
 VERSION=2026.05.01 ./build.sh # explicit version
 ```
+
+(The release workflow uses `date -u` so its default version is UTC; pass an
+explicit `version` input to the workflow to avoid timezone confusion at the
+day boundary.)
 
 Stages `source/` into a tmpdir mirroring `/usr/local/emhttp/plugins/wg-watchdog/`,
 chmods scripts/event hooks to 0755 and `.page`/`.php`/`.cfg` to 0644, writes
@@ -209,11 +213,17 @@ the key affects scheduling.
 
 ## Conventions
 
-- **Bash scripts** use `set -u` (not `set -e` — failure paths are handled
-  explicitly so `wg-quick down` returning non-zero doesn't abort the hard
-  bounce). Restore `PATH` at the top of cron-invoked scripts; the test
-  harness keeps its own `PATH` (mock binaries first) when `WGW_TEST_DIR` is
-  set, so don't unconditionally overwrite `PATH`.
+- **Runtime shell scripts** (`watchdog.sh`, `install_cron.sh`,
+  `remove_cron.sh`, `lib.sh`) use `set -u` (not `set -e` — failure paths are
+  handled explicitly so `wg-quick down` returning non-zero doesn't abort the
+  hard bounce). The build script (`build.sh`) uses `set -euo pipefail`
+  because it's a one-shot pipeline where any failure should abort. The
+  Unraid event hooks (`source/event/{started,stopping}`) intentionally use
+  neither, so a transient cron-sync hiccup at array start/stop never
+  short-circuits Unraid's event chain. Restore `PATH` at the top of
+  cron-invoked scripts; the test harness keeps its own `PATH` (mock
+  binaries first) when `WGW_TEST_DIR` is set, so don't unconditionally
+  overwrite `PATH`.
 - **`lib.sh` is sourced only.** Helpers must stay side-effect-free so
   `test_lib.sh` can exercise them in isolation.
 - **awk in `conf_redirect_prone`** must stay portable to mawk/busybox awk —
