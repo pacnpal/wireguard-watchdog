@@ -2,13 +2,13 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "wg-watchdog">
 <!ENTITY author    "pacnpal">
-<!ENTITY version   "2026.04.26">
-<!ENTITY md5       "de7a18a3c0f6f756486d7605061ec03d">
+<!ENTITY version   "2026.04.29">
+<!ENTITY md5       "4ac1cdc166a61684256416d5fb4e293e">
 <!ENTITY launch    "Settings/wg-watchdog">
 <!ENTITY github    "https://github.com/pacnpal/wireguard-watchdog">
 <!ENTITY support   "https://forums.unraid.net/topic/198468-plugin-wireguard-watchdog/">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/pacnpal/wireguard-watchdog/main/plugin/wg-watchdog.plg">
-<!ENTITY pkg       "wg-watchdog-2026.04.26-noarch-1.txz">
+<!ENTITY pkg       "wg-watchdog-2026.04.29-noarch-1.txz">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>
